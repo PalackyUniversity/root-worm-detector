@@ -1,0 +1,10 @@
+matplotlib~=3.9.2
+tensorflow~=2.18.0
+seaborn~=0.13.2
+numpy~=1.26.4
+opencv-python~=4.9.0.80
+scikit-learn~=1.5.2
+livelossplot~=0.5.5
+tqdm~=4.67.1
+sahi~=0.11.18
+jupyterlab~=4.2.5
