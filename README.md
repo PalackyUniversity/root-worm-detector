@@ -32,5 +32,5 @@ python3 prepare_data.py
 ```
 3. Train the model by opening the jupyter notebook `train_model.ipynb` and run the cells (if not using data preparation technique in step 2, just change names of `DATA_X` and `DATA_Y` directories)
 ```bash
-jupyter
+jupyter-lab
 ```
