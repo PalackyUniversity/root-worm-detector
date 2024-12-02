@@ -1,5 +1,5 @@
 # Root Worm Detector
-Neural network UNet `seresnet18` adaptation for root worm detection.
+Neural network [`SE-ResNet`](https://arxiv.org/pdf/1709.01507) adaptation, specifically [`seresnet18`]() from Python library [`segmentation-models`](https://pypi.org/project/segmentation-models/) with `TensorFlow` (`Keras`) backend, was used for root worm detection.
 
 ## Examples
 ### Roots with worms
