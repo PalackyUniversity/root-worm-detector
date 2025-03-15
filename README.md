@@ -25,6 +25,10 @@ pip3 install -r requirements.txt
 ```
 
 ## Train your own model
+0. Go to train folder
+```bash
+cd train
+```
 1. Prepare data into `x-original` (source images) and `y-original` (source annotated images) directories
 2. If the resolution of source images is too high, run `prepare_data.py` to split source images into cropped image with overlap
 ```bash
