@@ -5,6 +5,7 @@ import json
 import cv2
 import os
 
+from config.model import Model
 from logic.prediction_logic import PredictionLogic
 
 
@@ -23,7 +24,7 @@ class ImageLogic:
             try:
                 with open(json_path, "r") as fp:
                     meta = json.load(fp)
-                if int(meta.get("model_version", 0)) >= PredictionLogic.CURRENT_MODEL_VERSION:
+                if int(meta.get("model_version", 0)) >= Model.CURRENT_MODEL_VERSION:
                     data["predicted"] = True
                     data["contours"] = [np.array(cnt, dtype=np.int32) for cnt in meta.get("contours", [])]
             except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
