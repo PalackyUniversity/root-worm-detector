@@ -409,6 +409,16 @@ class MainWindow(QMainWindow):
                 self.__effective_scale
             )
 
+        # Draw prediction scores with dynamic scaling and color based on selection
+        if "contours" in data and "scores" in data:
+            ImageLogic.draw_prediction_scores(
+                img,
+                data["contours"],
+                data["scores"],
+                self.__group_selected_indices,
+                self.__effective_scale
+            )
+
         # Render the image
         h, w, _ = img.shape
         pixmap = QPixmap.fromImage(QImage(img.data, w, h, 3 * w, QImage.Format_BGR888))

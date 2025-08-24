@@ -27,6 +27,7 @@ class ImageLogic:
                 if int(meta.get("model_version", 0)) >= Model.CURRENT_MODEL_VERSION:
                     data["predicted"] = True
                     data["contours"] = [np.array(cnt, dtype=np.int32) for cnt in meta.get("contours", [])]
+                    data["scores"] = [float(i) for i in meta.get("scores", [])]
             except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
                 pass
         return data
@@ -147,3 +148,35 @@ class ImageLogic:
         }
         with open(data["path"] + "_contours.json", "w") as f:
             json.dump(meta, f)
+
+    @staticmethod
+    def draw_prediction_scores(img, contours, scores, group_selected_indices, effective_scale):
+        for i, (cnt, score) in enumerate(zip(contours, scores)):
+            m = cv2.moments(cnt)
+            if m["m00"] != 0:
+                cx = int(m["m10"] / m["m00"])
+                cy = int(m["m01"] / m["m00"])
+            else:
+                pt = cnt[0].ravel()
+                cx, cy = int(pt[0]), int(pt[1])
+
+            font_scale = max(0.5, 1.0 * effective_scale)
+            thickness = max(1, int(2 * effective_scale))
+            text = f"{score:.2f}"
+            (tw, th), _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)
+            # Place text above the contour center
+            text_x = int(cx - tw / 2)
+            text_y = int(cy - th / 2 - max(10, 10 * effective_scale))
+            color = (0, 0, 255) if i in group_selected_indices else (0, 255, 0)
+            cv2.putText(
+                img,
+                text,
+                (text_x, text_y),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                font_scale,
+                color,
+                thickness,
+                cv2.LINE_AA
+            )
+        return img
+
