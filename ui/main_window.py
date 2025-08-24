@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, QPoint, QRect
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
 from logic.image_logic import ImageLogic
+from ui.draggable_image_list import DraggableImageList
 from ui.export_dialog import ExportDialog
 from config.shortcuts import Shortcuts
 from config.strings import Strings
@@ -101,8 +102,8 @@ class MainWindow(QMainWindow):
         self.label_image.mouseMoveEvent = self.preview_mouse_move
         self.label_image.mouseReleaseEvent = self.preview_mouse_release
 
-        # Image list panel
-        self.panel_image_list = QListWidget()
+        # Image list panel (pass self to DraggableImageList)
+        self.panel_image_list = DraggableImageList(self)
         self.panel_image_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self.panel_image_list.customContextMenuRequested.connect(self.show_list_context_menu)
         self.panel_image_list.currentRowChanged.connect(self.on_image_selected)
