@@ -1,40 +1,110 @@
 # Root Worm Detector
-Neural network [`SE-ResNet`](https://arxiv.org/pdf/1709.01507) adaptation, specifically [`seresnet18`](https://amaarora.github.io/fastexplain/2020/07/24/SeNet.html) from Python library [`segmentation-models`](https://pypi.org/project/segmentation-models/) with `TensorFlow` (`Keras`) backend, was used for root worm detection.
 
-## Examples
-### Roots with worms
-![roots with worms 1](docs/example_root_worms.png)
-![roots with worms 2](docs/example_root_worms2.png)
+Root Worm Detector is a Python-based application for detecting and visualizing root worms in images using deep learning. It provides an interactive GUI for batch processing, annotation, and inspection of predictions, making it suitable for research and practical applications in plant pathology and soil biology.
 
-### Roots without worms
-![roots without worms 1](docs/example_root.png)
-![roots without worms 2](docs/example_root2.png)
+---
 
-### No roots
-![nothing](docs/example_nothing.png)
+## Features
+
+- **Drag & Drop File Addition:** Easily add images by dragging them into the application.
+- **Interactive GUI:** Browse, annotate, and inspect predictions with a user-friendly interface.
+- **Dynamic Visualization:** Bounding boxes, crosses, and prediction scores are dynamically scaled with zoom.
+- **Selection Highlighting:** Prediction scores and contours change color when selected.
+- **Batch Processing:** Process multiple images at once.
+- **Custom Model Training:** Train your own detection model using provided scripts.
+- **Export Results:** Save predictions and annotations for further analysis.
+
+---
+
+## Model Description
+
+The detection backend is based on [Ultralytics YOLO](https://github.com/ultralytics/ultralytics) framework and [SAHI](https://github.com/obss/sahi) for efficient large image inference via slicing.
+
+---
 
 ## Installation
-1. Clone the repository
-2. Install python3
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/PalackyUniversity/root-worm-detector.git
+   cd root-worm-detector
+   ```
+
+2. **Install Python:**
 ```bash
-sudo apt-get install python3 python3-pip
-```
-3. Install the required packages
+   apt install python3 python3-pip python3-venv
+   ```
+3. **Install dependencies:**
+   It is recommended to use a virtual environment.
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+---
+
+## Usage
+
+### Launching the GUI
+
 ```bash
-pip3 install -r requirements.txt
+python3 main.py
 ```
 
-## Train your own model
-0. Go to train folder
-```bash
-cd train
+### Adding Images
+
+- Use the "Import" buttons or **drag and drop** image files into the file list panel.
+
+### Viewing Predictions
+
+- Select an image and click "Predict" button to view predictions.
+- Bounding boxes, crosses, and prediction scores are drawn and dynamically scaled.
+- Click on predictions to select; selected predictions are highlighted and their scores change color. You can delete selected predictions if needed.
+- You can zoom in/out using the +/- on the keyboard
+
+### Exporting Results
+
+- Annotations and predictions can be saved for further analysis.
+
+---
+
+## Training Your Own Model
+
+You can train your own worm detection model using the scripts provided in the `train/` directory.
+
+1. **Prepare your dataset** in the required format (images and corresponding masks/labels).
+2. **Run the training pipeline:**
+   - The training process is split into several scripts for preprocessing, tiling, conversion, and training.
+   - Example workflow:
+     ```bash
+     # 1. Tile images and annotations
+     python train/01_tiling.py
+
+     # 2. Convert COCO annotations to YOLO format
+     python train/02_coco_to_yolo.py
+
+     # 3. Split dataset into train/val
+     python train/03_split.py
+
+     # 4. Train the model
+     python train/04_train.py
+     ```
+   - Adjust script arguments and paths as needed for your dataset.
+
+3. **Model Output:** The trained model weights will be saved and can be used by the GUI for inference.
+
+---
+
+## Project Structure
+
 ```
-1. Prepare data into `x-original` (source images) and `y-original` (source annotated images) directories
-2. If the resolution of source images is too high, run `prepare_data.py` to split source images into cropped image with overlap
-```bash
-python3 prepare_data.py
-```
-3. Train the model by opening the jupyter notebook `train_model.ipynb` and run the cells (if not using data preparation technique in step 2, just change names of `DATA_X` and `DATA_Y` directories)
-```bash
-jupyter-lab
+root-worm-detector/
+├── logic/           # Core logic for image processing and prediction
+├── train/           # Training and data preparation scripts
+├── ui/              # GUI implementation
+├── data/            # Example or user data (not included)
+├── models/          # Pretrained or user-trained models
+├── requirements.txt # Python dependencies
+└── README.md
 ```
