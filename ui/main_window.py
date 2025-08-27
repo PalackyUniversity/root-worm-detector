@@ -34,6 +34,11 @@ class MainWindow(QMainWindow):
         self.__cancel_prediction = False
         self.__cross_preview_mode = False
 
+        # For panning
+        self._panning = False
+        self._pan_start_pos = None
+        self._pan_start_scroll = None
+
         # Window
         self.setWindowTitle(Strings.WINDOW_TITLE)
         self.setMinimumSize(Config.WINDOW_SIZE_MIN)
@@ -535,6 +540,18 @@ class MainWindow(QMainWindow):
         if not len(self.__image_data) > 0 or self.__current_index == -1:
             return
 
+        # --- Panning logic ---
+        if not self.__drawing and not self.__group_select_active and event.button() == Qt.LeftButton:
+            self._panning = True
+            self.label_image.setCursor(Qt.ClosedHandCursor)
+            self._pan_start_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+            self._pan_start_scroll = (
+                self.panel_image.horizontalScrollBar().value(),
+                self.panel_image.verticalScrollBar().value()
+            )
+            return
+        # --- End panning logic ---
+
         pt = self.get_image_coordinates(event)
         # If group selection tool is active, start group selection.
         if self.__group_select_active:
@@ -560,6 +577,18 @@ class MainWindow(QMainWindow):
         self.update_controls()
 
     def preview_mouse_move(self, event: QMouseEvent):
+        # --- Panning logic ---
+        if self._panning and self._pan_start_pos is not None:
+            current_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+            dx = current_pos.x() - self._pan_start_pos.x()
+            dy = current_pos.y() - self._pan_start_pos.y()
+            h_bar = self.panel_image.horizontalScrollBar()
+            v_bar = self.panel_image.verticalScrollBar()
+            h_bar.setValue(self._pan_start_scroll[0] - dx)
+            v_bar.setValue(self._pan_start_scroll[1] - dy)
+            return
+        # --- End panning logic ---
+
         if self.__group_selection_start is not None:
             pt = self.get_image_coordinates(event)
             self.__group_selection_rect = QRect(self.__group_selection_start, pt).normalized()
@@ -572,6 +601,15 @@ class MainWindow(QMainWindow):
             self.update_preview()
 
     def preview_mouse_release(self, event: QMouseEvent):
+        # --- Panning logic ---
+        if self._panning:
+            self._panning = False
+            self.label_image.setCursor(Qt.ArrowCursor)
+            self._pan_start_pos = None
+            self._pan_start_scroll = None
+            return
+        # --- End panning logic ---
+
         # Handle group selection if active.
         if self.__group_selection_rect is not None and self.__group_select_active:
             data = self.__image_data[self.__current_index]

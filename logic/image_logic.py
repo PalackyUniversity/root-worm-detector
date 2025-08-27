@@ -143,7 +143,7 @@ class ImageLogic:
     def save_image_data(data):
         meta = {
             "prediction_time": datetime.now().isoformat(),
-            "model_version": PredictionLogic.CURRENT_MODEL_VERSION,
+            "model_version": Model.CURRENT_MODEL_VERSION,
             "contours": [cnt.tolist() for cnt in data["contours"]]
         }
         with open(data["path"] + "_contours.json", "w") as f:
