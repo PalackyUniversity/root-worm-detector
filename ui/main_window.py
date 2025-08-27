@@ -107,6 +107,9 @@ class MainWindow(QMainWindow):
         self.label_image.mouseMoveEvent = self.preview_mouse_move
         self.label_image.mouseReleaseEvent = self.preview_mouse_release
 
+        # Enable wheel event on label_image for zooming
+        self.label_image.wheelEvent = self.preview_wheel_event
+
         # Image list panel (pass self to DraggableImageList)
         self.panel_image_list = DraggableImageList(self)
         self.panel_image_list.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -718,3 +721,17 @@ class MainWindow(QMainWindow):
                     return
 
         super().keyPressEvent(event)
+
+    def preview_wheel_event(self, event):
+        # Zoom in/out with Ctrl + mouse wheel
+        if event.modifiers() & Qt.ControlModifier:
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self.zoom_step_in()
+            elif delta < 0:
+                self.zoom_step_out()
+            event.accept()
+        else:
+            # Pass event to parent for normal scrolling
+            super(QLabel, self.label_image).wheelEvent(event)
+
