@@ -24,17 +24,23 @@ The detection backend is based on [Ultralytics YOLO](https://github.com/ultralyt
 
 ## Installation
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/PalackyUniversity/root-worm-detector.git
-   cd root-worm-detector
-   ```
 
-2. **Install Python:**
+1. **Install Python:**
 ```bash
    apt install python3 python3-pip python3-venv
    ```
-3. **Install dependencies:**
+2. **Install Git LFS:**
+```bash
+   git lfs install
+   ```
+3. **Clone the repository:**
+   ```bash
+   git clone https://github.com/PalackyUniversity/root-worm-detector.git
+   cd root-worm-detector
+   git lfs pull
+   ```
+
+4. **Install dependencies:**
    It is recommended to use a virtual environment.
    ```bash
    python3 -m venv venv
