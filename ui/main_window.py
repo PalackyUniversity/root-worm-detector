@@ -488,11 +488,17 @@ class MainWindow(QMainWindow):
             self.update_image_list()
 
             # self.progress_bar.setValue(int((self.progress_steps / 5) * 100))
-            self.__image_data[idx]["contours"] = PredictionLogic.predict_contours(self.__image_data[idx]["image"], self.__image_data[idx]["path"])
+            contours, scores = PredictionLogic.predict_contours(self.__image_data[idx]["image"], self.__image_data[idx]["path"])
+            self.__image_data[idx]["contours"] = contours
+            self.__image_data[idx]["scores"] = scores
+
             self.__image_data[idx]["predicted"] = True
             self.__image_data[idx]["processing"] = False
             self.update_image_list()
             self.progress_bar.setValue(100)
+            # --- Update preview after each prediction to show confidences ---
+            self.update_preview()
+            # --- End update preview ---
 
         self.prediction_enable_controls(True)
         self.update_preview()
@@ -734,4 +740,3 @@ class MainWindow(QMainWindow):
         else:
             # Pass event to parent for normal scrolling
             super(QLabel, self.label_image).wheelEvent(event)
-
