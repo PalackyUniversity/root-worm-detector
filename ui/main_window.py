@@ -340,12 +340,15 @@ class MainWindow(QMainWindow):
     def load_files(self, files):
         self.progress_bar.setVisible(True)
 
-        # Load all data
-        total = len(files)
-        for i, f in enumerate(files):
+        # Filter out files that are already loaded
+        existing_paths = {data["path"] for data in self.__image_data}
+        files_to_load = [f for f in files if f not in existing_paths]
+
+        total = len(files_to_load)
+        for i, f in enumerate(files_to_load):
             data = ImageLogic.load_image(f)
             self.__image_data.append(data)
-            self.progress_bar.setValue(int(((i + 1) / total) * 100))
+            self.progress_bar.setValue(int(((i + 1) / max(total, 1)) * 100))
             QApplication.processEvents()
 
         self.progress_bar.setVisible(False)
