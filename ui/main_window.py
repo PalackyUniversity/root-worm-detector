@@ -479,15 +479,17 @@ class MainWindow(QMainWindow):
         self.prediction_enable_controls(False)
         self.__cancel_prediction = False
 
-        for idx in indices_to_predict:
+        total = len(indices_to_predict)
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setValue(0)
+
+        for idx_num, idx in enumerate(indices_to_predict):
             if self.__cancel_prediction:
                 break
 
-            self.progress_bar.setValue(0)
             self.__image_data[idx]["processing"] = True
             self.update_image_list()
 
-            # self.progress_bar.setValue(int((self.progress_steps / 5) * 100))
             contours, scores = PredictionLogic.predict_contours(self.__image_data[idx]["image"], self.__image_data[idx]["path"])
             self.__image_data[idx]["contours"] = contours
             self.__image_data[idx]["scores"] = scores
@@ -495,11 +497,16 @@ class MainWindow(QMainWindow):
             self.__image_data[idx]["predicted"] = True
             self.__image_data[idx]["processing"] = False
             self.update_image_list()
-            self.progress_bar.setValue(100)
+
             # --- Update preview after each prediction to show confidences ---
             self.update_preview()
             # --- End update preview ---
 
+            # Progress bar increases as files are processed
+            self.progress_bar.setValue(int(((idx_num + 1) / total) * 100))
+            QApplication.processEvents()
+
+        self.progress_bar.setVisible(False)
         self.prediction_enable_controls(True)
         self.update_preview()
         self.update_controls()
