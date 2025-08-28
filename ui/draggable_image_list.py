@@ -13,22 +13,32 @@ class DraggableImageList(QListWidget):
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
-            event.acceptProposedAction()
+            # Only accept if at least one file is a supported image
+            for url in event.mimeData().urls():
+                path = url.toLocalFile()
+                if os.path.isfile(path) and path.lower().endswith(Config.IMAGE_EXTENSIONS):
+                    event.acceptProposedAction()
+                    return
+                elif os.path.isdir(path):
+                    for root, _, fs in os.walk(path):
+                        for f in fs:
+                            if f.lower().endswith(Config.IMAGE_EXTENSIONS):
+                                event.acceptProposedAction()
+                                return
+            event.ignore()
         else:
             super().dragEnterEvent(event)
 
     def dragMoveEvent(self, event):
-        if event.mimeData().hasUrls():
-            event.acceptProposedAction()
-        else:
-            super().dragMoveEvent(event)
+        # Same logic as dragEnterEvent
+        self.dragEnterEvent(event)
 
     def dropEvent(self, event):
         if event.mimeData().hasUrls():
             files = []
             for url in event.mimeData().urls():
                 path = url.toLocalFile()
-                if os.path.isfile(path):
+                if os.path.isfile(path) and path.lower().endswith(Config.IMAGE_EXTENSIONS):
                     files.append(path)
                 elif os.path.isdir(path):
                     for root, _, fs in os.walk(path):
@@ -40,4 +50,3 @@ class DraggableImageList(QListWidget):
             event.acceptProposedAction()
         else:
             super().dropEvent(event)
-
