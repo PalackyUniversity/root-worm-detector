@@ -6,15 +6,19 @@ import cv2
 import os
 
 from config.model import Model
-from logic.prediction_logic import PredictionLogic
+from config.strings import Strings
 
 
 class ImageLogic:
     @staticmethod
     def load_image(file_path):
+        img = cv2.imread(file_path)
+        if img is None:
+            raise ValueError(Strings.IMAGE_LOAD_ERROR_MESSAGE.format(file_path=file_path))
+
         data = {
             "path": file_path,
-            "image": cv2.imread(file_path),
+            "image": img,
             "contours": [],
             "predicted": False,
             "processing": False
@@ -179,4 +183,3 @@ class ImageLogic:
                 cv2.LINE_AA
             )
         return img
-

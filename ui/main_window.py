@@ -344,10 +344,17 @@ class MainWindow(QMainWindow):
         existing_paths = {data["path"] for data in self.__image_data}
         files_to_load = [f for f in files if f not in existing_paths]
 
+        if len(files) != len(files_to_load):
+            QMessageBox.warning(self, Strings.ALREADY_IMPORTED_TITLE, Strings.ALREADY_IMPORTED_MESSAGE)
+
         total = len(files_to_load)
         for i, f in enumerate(files_to_load):
-            data = ImageLogic.load_image(f)
-            self.__image_data.append(data)
+            try:
+                data = ImageLogic.load_image(f)
+                self.__image_data.append(data)
+            except Exception as e:
+                QMessageBox.critical(self, Strings.IMAGE_LOAD_ERROR_TITLE, str(e))
+                continue
             self.progress_bar.setValue(int(((i + 1) / max(total, 1)) * 100))
             QApplication.processEvents()
 

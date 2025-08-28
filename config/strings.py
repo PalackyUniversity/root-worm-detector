@@ -53,3 +53,9 @@ class Strings:
     # Placeholders
     IMAGE_LIST = "Image List"
     IMAGE_PREVIEW = "Image Preview"
+
+    # Error/Warning messages
+    IMAGE_LOAD_ERROR_TITLE = "Image Load Error"
+    ALREADY_IMPORTED_TITLE = "Already Imported"
+    ALREADY_IMPORTED_MESSAGE = "Some files are already imported and were skipped."
+    IMAGE_LOAD_ERROR_MESSAGE = "Failed to load image: {file_path}"
