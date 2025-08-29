@@ -134,11 +134,13 @@ class ImageLogic:
             ]
             circle_contour = np.array(circle_points, dtype=np.int32).reshape((-1, 1, 2))
             data["contours"].append(circle_contour)
+            data["scores"].append(1)
 
         # If more than one point is drawn, proceed as before.
         else:
             contour = np.array(cnt, dtype=np.int32)
             data["contours"].append(ImageLogic.smooth_contour(contour))
+            data["scores"].append(1)
 
         cls.save_image_data(data)
 
