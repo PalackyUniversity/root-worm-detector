@@ -1,11 +1,12 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
-                               QProgressBar, QMenu, QMessageBox)
-from PySide6.QtGui import QImage, QPixmap, QMouseEvent, QAction, QPalette
+                               QProgressBar, QMenu, QMessageBox, QUndoView)
+from PySide6.QtGui import QImage, QPixmap, QMouseEvent, QAction, QPalette, QUndoStack
 from PySide6.QtCore import Qt, QPoint, QRect
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
 from logic.image_logic import ImageLogic
+from logic.commands import AddContourCommand, RemoveContoursCommand
 from ui.draggable_image_list import DraggableImageList
 from ui.export_dialog import ExportDialog
 from config.shortcuts import Shortcuts
@@ -34,6 +35,9 @@ class MainWindow(QMainWindow):
         self.__cancel_prediction = False
         self.__cross_preview_mode = False
         self._show_confidences = True  # Add this line to store toggle state
+
+        # Initialize undo stack
+        self.__undo_stack = QUndoStack(self)
 
         # For panning
         self._panning = False
@@ -174,6 +178,18 @@ class MainWindow(QMainWindow):
         self.menu_export.setShortcut(Shortcuts.EXPORT)
         self.menu_export.triggered.connect(self.export_data)
 
+        # Menu -> Edit -> Undo
+        self.menu_undo = QAction(Strings.EDIT_UNDO, self)
+        self.menu_undo.setShortcut(Shortcuts.UNDO)
+        self.menu_undo.triggered.connect(self.__undo_stack.undo)
+        self.__undo_stack.canUndoChanged.connect(self.update_undo_actions)
+
+        # Menu -> Edit -> Redo
+        self.menu_redo = QAction(Strings.EDIT_REDO, self)
+        self.menu_redo.setShortcut(Shortcuts.REDO)
+        self.menu_redo.triggered.connect(self.__undo_stack.redo)
+        self.__undo_stack.canRedoChanged.connect(self.update_undo_actions)
+
         # Menu -> Edit -> Add contour
         self.menu_add_contour = QAction(Strings.EDIT_ADD_CONTOUR, self)
         self.menu_add_contour.setShortcut(Shortcuts.CONTOUR_ADD)
@@ -231,6 +247,9 @@ class MainWindow(QMainWindow):
         menu_file.addAction(self.menu_export)
 
         # Menu setup - Edit
+        menu_edit.addAction(self.menu_undo)
+        menu_edit.addAction(self.menu_redo)
+        menu_edit.addSeparator()
         menu_edit.addAction(self.menu_add_contour)
         menu_edit.addAction(self.menu_remove_contour)
 
@@ -249,6 +268,13 @@ class MainWindow(QMainWindow):
 
         self.update_image_list()
         self.update_controls()
+        self.update_undo_actions()
+
+    def update_undo_actions(self):
+        """Update the state of undo/redo actions based on undo stack state"""
+        self.menu_undo.setEnabled(self.__undo_stack.canUndo())
+        self.menu_redo.setEnabled(self.__undo_stack.canRedo())
+        self.update_preview()  # TODO this is maybe called multiple times
 
     def show_about(self):
         QMessageBox.information(
@@ -675,9 +701,11 @@ class MainWindow(QMainWindow):
 
         # If in drawing mode.
         if self.__drawing:
-            ImageLogic.add_contour(self.__image_data[self.__current_index], self.__current_contour)
+            # Create an undo command for this operation
+            command = AddContourCommand(self.__image_data[self.__current_index], self.__current_contour)
+            self.__undo_stack.push(command)
 
-            # Clear the current contour for the next drawing.
+            # Update UI after the command is executed
             self.__current_contour = []
             self.update_preview()
 
@@ -702,17 +730,19 @@ class MainWindow(QMainWindow):
         return QPoint(round(x), round(y))
 
     def remove_selected_contour(self):
-        if self.__current_index == -1:
+        if self.__current_index == -1 or not self.__group_selected_indices:
             return
 
         data = self.__image_data[self.__current_index]
 
-        if self.__group_selected_indices:
-            for i in sorted(self.__group_selected_indices, reverse=True):
-                del data["contours"][i]
-            self.__group_selected_indices = []
-            ImageLogic.save_image_data(data)
+        # Create an undo command for removing contours
+        command = RemoveContoursCommand(data, self.__group_selected_indices)
+        self.__undo_stack.push(command)
 
+        # Clear selection after removal
+        self.__group_selected_indices = []
+
+        # Update UI
         self.update_preview()
         self.update_controls()
 
@@ -743,6 +773,9 @@ class MainWindow(QMainWindow):
 
         # Disable group selection button if no image is selected.
         self.button_group_select.setEnabled(has_images)
+
+        # Update undo/redo actions
+        self.update_undo_actions()
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Delete:

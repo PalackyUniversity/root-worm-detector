@@ -26,6 +26,8 @@ class Strings:
     # Edit Menu items
     EDIT_ADD_CONTOUR = "Add Contour"
     EDIT_REMOVE_CONTOUR = "Remove Contour"
+    EDIT_UNDO = "Undo"
+    EDIT_REDO = "Redo"
 
     # Model Menu items
     START_PREDICTION = "Start Prediction"

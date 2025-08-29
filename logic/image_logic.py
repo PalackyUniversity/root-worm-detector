@@ -142,6 +142,8 @@ class ImageLogic:
 
         cls.save_image_data(data)
 
+        return len(data["contours"]) - 1  # Return the index of the newly added contour
+
 
     @staticmethod
     def save_image_data(data):

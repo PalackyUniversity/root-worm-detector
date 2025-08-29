@@ -17,3 +17,7 @@ class Shortcuts:
     # Zoom
     ZOOM_IN = "+"
     ZOOM_OUT = "-"
+
+    # Undo/Redo
+    UNDO = "Ctrl+Z"
+    REDO = "Ctrl+Y"
