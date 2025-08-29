@@ -518,7 +518,7 @@ class MainWindow(QMainWindow):
             pixmap.width() * self.__effective_scale,
             pixmap.height() * self.__effective_scale,
             Qt.KeepAspectRatio,
-            Qt.SmoothTransformation
+            Qt.FastTransformation
         )
         self.label_image.setPixmap(scaled)
         self.label_image.resize(scaled.size())
