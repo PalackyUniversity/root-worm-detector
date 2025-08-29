@@ -33,6 +33,7 @@ class MainWindow(QMainWindow):
         self.__effective_scale = 1
         self.__cancel_prediction = False
         self.__cross_preview_mode = False
+        self._show_confidences = True  # Add this line to store toggle state
 
         # For panning
         self._panning = False
@@ -204,6 +205,12 @@ class MainWindow(QMainWindow):
         self.menu_zoom_out.setShortcut(Shortcuts.ZOOM_OUT)
         self.menu_zoom_out.triggered.connect(self.zoom_step_out)
 
+        # Menu -> View -> Toggle confidences
+        self.menu_toggle_confidences = QAction(Strings.SHOW_CONFIDENCES, self)
+        self.menu_toggle_confidences.setCheckable(True)
+        self.menu_toggle_confidences.setChecked(True)
+        self.menu_toggle_confidences.triggered.connect(self.toggle_confidences)
+
         # Menu -> Help -> About
         menu_about = QAction(Strings.ABOUT, self)
         menu_about.triggered.connect(self.show_about)
@@ -234,6 +241,8 @@ class MainWindow(QMainWindow):
         # Menu setup - View
         menu_view.addAction(self.menu_zoom_in)
         menu_view.addAction(self.menu_zoom_out)
+        menu_view.addSeparator()
+        menu_view.addAction(self.menu_toggle_confidences)  # Add toggle to View menu
 
         # Menu setup - Help
         menu_help.addAction(menu_about)
@@ -395,6 +404,10 @@ class MainWindow(QMainWindow):
         self.update_preview()
         self.update_controls()
 
+    def toggle_confidences(self):
+        self._show_confidences = self.menu_toggle_confidences.isChecked()
+        self.update_preview()
+
     def update_preview(self):
         if self.__current_index < 0 or self.__current_index >= len(self.__image_data):
             self.label_image.setText(Strings.IMAGE_PREVIEW)
@@ -428,7 +441,10 @@ class MainWindow(QMainWindow):
             )
 
         # Draw prediction scores with dynamic scaling and color based on selection
-        if "contours" in data and "scores" in data:
+        if (
+            self._show_confidences and
+            "contours" in data and "scores" in data
+        ):
             ImageLogic.draw_prediction_scores(
                 img,
                 data["contours"],
