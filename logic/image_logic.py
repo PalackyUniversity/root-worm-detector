@@ -37,31 +37,32 @@ class ImageLogic:
         return data
 
     @staticmethod
-    def draw_annotations(data, cross_preview_mode, group_selected_indices, effective_scale):
+    def draw_annotations(data, cross_preview_mode, group_selected_indices, effective_scale, show_contours=True):
         img = data["image"].copy()
 
-        # Draw contours using cross preview if enabled.
-        for i, cnt in enumerate(data["contours"]):
-            color = (0, 0, 255) if i in group_selected_indices else (0, 255, 0)  # TODO color
+        # Draw contours using cross preview if enabled, but only if show_contours is True
+        if show_contours:
+            for i, cnt in enumerate(data["contours"]):
+                color = (0, 0, 255) if i in group_selected_indices else (0, 255, 0)  # TODO color
 
-            if cross_preview_mode:
-                m = cv2.moments(cnt)
-                if m["m00"] != 0:
-                    cx = int(m["m10"] / m["m00"])
-                    cy = int(m["m01"] / m["m00"])
+                if cross_preview_mode:
+                    m = cv2.moments(cnt)
+                    if m["m00"] != 0:
+                        cx = int(m["m10"] / m["m00"])
+                        cy = int(m["m01"] / m["m00"])
+                    else:
+                        # Fallback: if the contour area is zero, use the first point.
+                        pt = cnt[0].ravel()
+                        cx, cy = int(pt[0]), int(pt[1])
+
+                    marker_size = max(10, int(30 / effective_scale))  # Marker size scales with zoom
+                    cv2.drawMarker(img, (cx, cy), color,
+                                   markerType=cv2.MARKER_CROSS, markerSize=marker_size,
+                                   thickness=2, line_type=cv2.LINE_AA)
+
                 else:
-                    # Fallback: if the contour area is zero, use the first point.
-                    pt = cnt[0].ravel()
-                    cx, cy = int(pt[0]), int(pt[1])
-
-                marker_size = max(10, int(30 / effective_scale))  # Marker size scales with zoom
-                cv2.drawMarker(img, (cx, cy), color,
-                               markerType=cv2.MARKER_CROSS, markerSize=marker_size,
-                               thickness=2, line_type=cv2.LINE_AA)
-
-            else:
-                # Draw the full contour outline.
-                cv2.drawContours(img, [cnt], -1, color, 2)
+                    # Draw the full contour outline.
+                    cv2.drawContours(img, [cnt], -1, color, 2)
 
         return img
 
@@ -145,7 +146,6 @@ class ImageLogic:
         cls.save_image_data(data)
 
         return len(data["contours"]) - 1  # Return the index of the newly added contour
-
 
     @staticmethod
     def save_image_data(data):

@@ -37,6 +37,7 @@ class Strings:
     ZOOM_IN = "Zoom In"
     ZOOM_OUT = "Zoom Out"
     SHOW_CONFIDENCES = "Show Confidences"
+    SHOW_CONTOURS = "Show Contours"
 
     # Help Menu items
     ABOUT = "About"

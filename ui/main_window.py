@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
         self.__cancel_prediction = False
         self.__cross_preview_mode = False
         self._show_confidences = True  # Add this line to store toggle state
+        self._show_contours = True     # Add toggle state for contours visibility
 
         # Initialize undo stack
         self.__undo_stack = QUndoStack(self)
@@ -228,6 +229,13 @@ class MainWindow(QMainWindow):
         self.menu_toggle_confidences.setShortcuts(Shortcuts.TOGGLE_CONFIDENCES)
         self.menu_toggle_confidences.triggered.connect(self.toggle_confidences)
 
+        # Menu -> View -> Toggle contours
+        self.menu_toggle_contours = QAction(Strings.SHOW_CONTOURS, self)
+        self.menu_toggle_contours.setCheckable(True)
+        self.menu_toggle_contours.setChecked(True)
+        self.menu_toggle_contours.setShortcuts(Shortcuts.TOGGLE_CONTOURS)
+        self.menu_toggle_contours.triggered.connect(self.toggle_contours)
+
         # Menu -> Help -> About
         menu_about = QAction(Strings.ABOUT, self)
         menu_about.triggered.connect(self.show_about)
@@ -262,7 +270,8 @@ class MainWindow(QMainWindow):
         menu_view.addAction(self.menu_zoom_in)
         menu_view.addAction(self.menu_zoom_out)
         menu_view.addSeparator()
-        menu_view.addAction(self.menu_toggle_confidences)  # Add toggle to View menu
+        menu_view.addAction(self.menu_toggle_confidences)
+        menu_view.addAction(self.menu_toggle_contours)  # Add toggle contours to View menu
 
         # Menu setup - Help
         menu_help.addAction(menu_about)
@@ -435,6 +444,11 @@ class MainWindow(QMainWindow):
         self._show_confidences = self.menu_toggle_confidences.isChecked()
         self.update_preview()
 
+    def toggle_contours(self):
+        """Toggle contours visibility"""
+        self._show_contours = self.menu_toggle_contours.isChecked()
+        self.update_preview()
+
     def update_preview(self):
         if self.__current_index < 0 or self.__current_index >= len(self.__image_data):
             self.label_image.setText(Strings.IMAGE_PREVIEW)
@@ -445,7 +459,8 @@ class MainWindow(QMainWindow):
             data,
             self.__cross_preview_mode,
             self.__group_selected_indices,
-            self.__effective_scale
+            self.__effective_scale,
+            self._show_contours  # Pass show_contours flag to draw_annotations
         )
 
         # If drawing
