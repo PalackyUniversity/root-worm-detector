@@ -236,6 +236,13 @@ class MainWindow(QMainWindow):
         self.menu_toggle_contours.setShortcuts(Shortcuts.TOGGLE_CONTOURS)
         self.menu_toggle_contours.triggered.connect(self.toggle_contours)
 
+        # Menu -> View -> Toggle cross preview
+        self.menu_toggle_cross_preview = QAction(Strings.CROSS_PREVIEW, self)
+        self.menu_toggle_cross_preview.setCheckable(True)
+        self.menu_toggle_cross_preview.setChecked(False)
+        self.menu_toggle_cross_preview.setShortcuts(Shortcuts.TOGGLE_CROSS_PREVIEW)
+        self.menu_toggle_cross_preview.triggered.connect(self.toggle_cross_preview_from_menu)
+
         # Menu -> Help -> About
         menu_about = QAction(Strings.ABOUT, self)
         menu_about.triggered.connect(self.show_about)
@@ -271,6 +278,8 @@ class MainWindow(QMainWindow):
         menu_view.addAction(self.menu_zoom_out)
         menu_view.addSeparator()
         menu_view.addAction(self.menu_toggle_confidences)
+        menu_view.addAction(self.menu_toggle_contours)
+        menu_view.addAction(self.menu_toggle_cross_preview)
         menu_view.addAction(self.menu_toggle_contours)  # Add toggle contours to View menu
 
         # Menu setup - Help
@@ -609,8 +618,26 @@ class MainWindow(QMainWindow):
             self.label_image.setCursor(Qt.CrossCursor)
 
     def toggle_cross_preview(self):
-        # Toggle the cross preview mode and update the preview.
+        # Toggle the cross preview mode from button and update the preview.
         self.__cross_preview_mode = self.button_cross_view.isChecked()
+
+        # Keep the menu item in sync with the button state
+        self.menu_toggle_cross_preview.setChecked(self.__cross_preview_mode)
+
+        if self.__cross_preview_mode:
+            accent = self.palette().color(QPalette.Highlight).name()
+            self.button_cross_view.setStyleSheet("background-color: " + accent + ";")
+        else:
+            self.button_cross_view.setStyleSheet("")
+
+        self.update_preview()
+
+    def toggle_cross_preview_from_menu(self):
+        # Toggle the cross preview mode from menu and update the button
+        self.__cross_preview_mode = self.menu_toggle_cross_preview.isChecked()
+
+        # Keep the button in sync with the menu item state
+        self.button_cross_view.setChecked(self.__cross_preview_mode)
 
         if self.__cross_preview_mode:
             accent = self.palette().color(QPalette.Highlight).name()

@@ -25,3 +25,4 @@ class Shortcuts:
     # View
     TOGGLE_CONFIDENCES = ["Ctrl+C"]  # Shortcut for showing/hiding confidences
     TOGGLE_CONTOURS = ["Ctrl+T"]     # Shortcut for showing/hiding contours
+    TOGGLE_CROSS_PREVIEW = ["Ctrl+D"] # Shortcut for toggling cross preview mode
