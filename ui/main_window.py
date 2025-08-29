@@ -165,66 +165,67 @@ class MainWindow(QMainWindow):
 
         # Menu -> File -> Import files
         self.menu_import_files = QAction(Strings.IMPORT_FILES, self)
-        self.menu_import_files.setShortcut(Shortcuts.IMPORT_FILES)
+        self.menu_import_files.setShortcuts(Shortcuts.IMPORT_FILES)
         self.menu_import_files.triggered.connect(self.import_files)
 
         # Menu -> File -> Import folder
         self.menu_import_folder = QAction(Strings.IMPORT_FOLDER, self)
-        self.menu_import_folder.setShortcut(Shortcuts.IMPORT_FOLDER)
+        self.menu_import_folder.setShortcuts(Shortcuts.IMPORT_FOLDER)
         self.menu_import_folder.triggered.connect(self.import_folder)
 
         # Menu -> File -> Export
         self.menu_export = QAction(Strings.EXPORT, self)
-        self.menu_export.setShortcut(Shortcuts.EXPORT)
+        self.menu_export.setShortcuts(Shortcuts.EXPORT)
         self.menu_export.triggered.connect(self.export_data)
 
         # Menu -> Edit -> Undo
         self.menu_undo = QAction(Strings.EDIT_UNDO, self)
-        self.menu_undo.setShortcut(Shortcuts.UNDO)
+        self.menu_undo.setShortcuts(Shortcuts.UNDO)
         self.menu_undo.triggered.connect(self.__undo_stack.undo)
         self.__undo_stack.canUndoChanged.connect(self.update_undo_actions)
 
         # Menu -> Edit -> Redo
         self.menu_redo = QAction(Strings.EDIT_REDO, self)
-        self.menu_redo.setShortcut(Shortcuts.REDO)
+        self.menu_redo.setShortcuts(Shortcuts.REDO)
         self.menu_redo.triggered.connect(self.__undo_stack.redo)
         self.__undo_stack.canRedoChanged.connect(self.update_undo_actions)
 
         # Menu -> Edit -> Add contour
         self.menu_add_contour = QAction(Strings.EDIT_ADD_CONTOUR, self)
-        self.menu_add_contour.setShortcut(Shortcuts.CONTOUR_ADD)
+        self.menu_add_contour.setShortcuts(Shortcuts.CONTOUR_ADD)
         self.menu_add_contour.triggered.connect(self.start_drawing)
 
         # Menu -> Edit -> Remove contour
         self.menu_remove_contour = QAction(Strings.EDIT_REMOVE_CONTOUR, self)
-        self.menu_remove_contour.setShortcut(Shortcuts.CONTOUR_DELETE)
+        self.menu_remove_contour.setShortcuts(Shortcuts.CONTOUR_DELETE)
         self.menu_remove_contour.triggered.connect(self.remove_selected_contour)
 
         # Menu -> Model -> Start prediction
         self.menu_start_prediction = QAction(Strings.START_PREDICTION, self)
-        self.menu_start_prediction.setShortcut(Shortcuts.PREDICTION_START)
+        self.menu_start_prediction.setShortcuts(Shortcuts.PREDICTION_START)
         self.menu_start_prediction.triggered.connect(self.start_prediction)
 
         # Menu -> Model -> Cancel prediction
         self.menu_cancel_prediction = QAction(Strings.CANCEL_PREDICTION, self)
-        self.menu_cancel_prediction.setShortcut(Shortcuts.PREDICTION_STOP)
+        self.menu_cancel_prediction.setShortcuts(Shortcuts.PREDICTION_STOP)
         self.menu_cancel_prediction.triggered.connect(self.cancel_prediction_process)
         self.menu_cancel_prediction.setEnabled(False)
 
         # Menu -> View -> Zoom in
         self.menu_zoom_in = QAction(Strings.ZOOM_IN, self)
-        self.menu_zoom_in.setShortcut(Shortcuts.ZOOM_IN)
+        self.menu_zoom_in.setShortcuts(Shortcuts.ZOOM_IN)
         self.menu_zoom_in.triggered.connect(self.zoom_step_in)
 
         # Menu -> View -> Zoom out
         self.menu_zoom_out = QAction(Strings.ZOOM_OUT, self)
-        self.menu_zoom_out.setShortcut(Shortcuts.ZOOM_OUT)
+        self.menu_zoom_out.setShortcuts(Shortcuts.ZOOM_OUT)
         self.menu_zoom_out.triggered.connect(self.zoom_step_out)
 
         # Menu -> View -> Toggle confidences
         self.menu_toggle_confidences = QAction(Strings.SHOW_CONFIDENCES, self)
         self.menu_toggle_confidences.setCheckable(True)
         self.menu_toggle_confidences.setChecked(True)
+        self.menu_toggle_confidences.setShortcuts(Shortcuts.TOGGLE_CONFIDENCES)
         self.menu_toggle_confidences.triggered.connect(self.toggle_confidences)
 
         # Menu -> Help -> About
@@ -320,7 +321,7 @@ class MainWindow(QMainWindow):
 
         # Right click -> Group select
         context_group_select = QAction(Strings.GROUP_SELECT, self)
-        context_group_select.setShortcut(Shortcuts.CONTOUR_GROUP_SELECT)
+        context_group_select.setShortcuts(Shortcuts.CONTOUR_GROUP_SELECT)
         context_group_select.triggered.connect(self.start_group_selection)
 
         # Right click - setup
@@ -330,7 +331,7 @@ class MainWindow(QMainWindow):
 
         if self.__group_selected_indices:
             context_clear_group_select = QAction(Strings.CONTEXT_CLEAR_GROUP_SELECT, self)
-            context_clear_group_select.setShortcut(Shortcuts.CLEAR_GROUP_SELECT)
+            context_clear_group_select.setShortcuts(Shortcuts.CLEAR_GROUP_SELECT)
             context_clear_group_select.triggered.connect(self.clear_group_selection)
 
             context.addAction(context_clear_group_select)
