@@ -618,26 +618,16 @@ class MainWindow(QMainWindow):
             self.label_image.setCursor(Qt.CrossCursor)
 
     def toggle_cross_preview(self):
-        # Toggle the cross preview mode from button and update the preview.
         self.__cross_preview_mode = self.button_cross_view.isChecked()
-
-        # Keep the menu item in sync with the button state
-        self.menu_toggle_cross_preview.setChecked(self.__cross_preview_mode)
-
-        if self.__cross_preview_mode:
-            accent = self.palette().color(QPalette.Highlight).name()
-            self.button_cross_view.setStyleSheet("background-color: " + accent + ";")
-        else:
-            self.button_cross_view.setStyleSheet("")
-
-        self.update_preview()
+        self.__toggle_cross_preview_common()
 
     def toggle_cross_preview_from_menu(self):
-        # Toggle the cross preview mode from menu and update the button
         self.__cross_preview_mode = self.menu_toggle_cross_preview.isChecked()
+        self.__toggle_cross_preview_common()
 
-        # Keep the button in sync with the menu item state
+    def __toggle_cross_preview_common(self):
         self.button_cross_view.setChecked(self.__cross_preview_mode)
+        self.menu_toggle_cross_preview.setChecked(self.__cross_preview_mode)
 
         if self.__cross_preview_mode:
             accent = self.palette().color(QPalette.Highlight).name()
