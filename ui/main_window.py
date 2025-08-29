@@ -44,6 +44,7 @@ class MainWindow(QMainWindow):
         self._panning = False
         self._pan_start_pos = None
         self._pan_start_scroll = None
+        self._pan_maybe = False  # <--- add this line
 
         # Window
         self.setWindowTitle(Strings.WINDOW_TITLE)
@@ -641,18 +642,6 @@ class MainWindow(QMainWindow):
         if not len(self.__image_data) > 0 or self.__current_index == -1:
             return
 
-        # --- Panning logic ---
-        if not self.__drawing and not self.__group_select_active and event.button() == Qt.LeftButton:
-            self._panning = True
-            self.label_image.setCursor(Qt.ClosedHandCursor)
-            self._pan_start_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
-            self._pan_start_scroll = (
-                self.panel_image.horizontalScrollBar().value(),
-                self.panel_image.verticalScrollBar().value()
-            )
-            return
-        # --- End panning logic ---
-
         pt = self.get_image_coordinates(event)
         # If group selection tool is active, start group selection.
         if self.__group_select_active:
@@ -668,17 +657,36 @@ class MainWindow(QMainWindow):
 
         # Otherwise, perform manual selection: clear any group selection.
         data = self.__image_data[self.__current_index]
-
+        selected = False
         for i, cnt in enumerate(data["contours"]):
             if cv2.pointPolygonTest(cnt, (pt.x(), pt.y()), False) >= 0:
                 self.__group_selected_indices = [i]
+                selected = True
                 break
-
+        if not selected:
+            self.__group_selected_indices = []
         self.update_preview()
         self.update_controls()
 
+        # Prepare for possible panning, but don't start panning yet
+        if not self.__drawing and not self.__group_select_active and event.button() == Qt.LeftButton:
+            self._pan_maybe = True
+            self._pan_start_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+            self._pan_start_scroll = (
+                self.panel_image.horizontalScrollBar().value(),
+                self.panel_image.verticalScrollBar().value()
+            )
+
     def preview_mouse_move(self, event: QMouseEvent):
-        # --- Panning logic ---
+        # Only start panning if mouse is held and moved enough
+        if self._pan_maybe and self._pan_start_pos is not None:
+            current_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+            dx = current_pos.x() - self._pan_start_pos.x()
+            dy = current_pos.y() - self._pan_start_pos.y()
+            if abs(dx) > 2 or abs(dy) > 2:  # small threshold to avoid accidental pan
+                self._panning = True
+                self._pan_maybe = False
+                self.label_image.setCursor(Qt.ClosedHandCursor)
         if self._panning and self._pan_start_pos is not None:
             current_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
             dx = current_pos.x() - self._pan_start_pos.x()
@@ -702,9 +710,10 @@ class MainWindow(QMainWindow):
             self.update_preview()
 
     def preview_mouse_release(self, event: QMouseEvent):
-        # --- Panning logic ---
-        if self._panning:
+        # End panning logic
+        if self._panning or self._pan_maybe:
             self._panning = False
+            self._pan_maybe = False
             self.label_image.setCursor(Qt.ArrowCursor)
             self._pan_start_pos = None
             self._pan_start_scroll = None
