@@ -77,7 +77,7 @@ class PredictionLogic:
     def predict_contours(cls, image, file_path):
         predicted_contours, predicted_scores = cls.predict(
                 model_type="ultralytics",
-                model_path="models/v1_best.pt",
+                model_path="models/v2_best.pt",
                 model_confidence_threshold=Model.MIN_OBJECT_CONFIDENCE,
                 source=image,
             )
