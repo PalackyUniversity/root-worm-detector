@@ -1,9 +1,9 @@
 from ultralytics.data.converter import convert_coco
-from pathlib import Path
+from shared_paths import *
 
 convert_coco(
-    labels_dir=Path("sliced"),
+    labels_dir=IMAGES_SLICED_DIR,
     use_segments=True,
     use_keypoints=False,
-    save_dir=Path("coco_to_yolo_output")
+    save_dir=ANNOTATIONS_YOLO_DIR
 )
