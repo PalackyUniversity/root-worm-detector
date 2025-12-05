@@ -1,5 +1,5 @@
 from ultralytics.data.converter import convert_coco
-from shared_paths import *
+from shared import *
 
 convert_coco(
     labels_dir=IMAGES_SLICED_DIR,

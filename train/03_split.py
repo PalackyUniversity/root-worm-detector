@@ -1,4 +1,4 @@
-from shared_paths import *
+from shared import *
 from tqdm import tqdm
 import random
 import shutil

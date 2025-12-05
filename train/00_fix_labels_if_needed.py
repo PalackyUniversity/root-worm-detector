@@ -2,7 +2,7 @@
 Some annotation programs output random IDs for their classes, this script will enumerate them from zero.
 """
 
-from shared_paths import *
+from shared import *
 import json
 
 with open(ANNOTATIONS_COCO_FILE) as f:

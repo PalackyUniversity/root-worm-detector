@@ -7,11 +7,8 @@ if coco_annotation.area == 0:
     continue
 """
 
-from shared_paths import *
 from sahi.slicing import slice_coco
-
-TILE_SIZE = 640
-OVERLAP = 0.2
+from shared import *
 
 slice_coco(
     coco_annotation_file_path=ANNOTATIONS_COCO_FIXED_FILE,
@@ -20,6 +17,6 @@ slice_coco(
     output_coco_annotation_file_name=ANNOTATIONS_COCO_SLICED_FILE,
     slice_height=TILE_SIZE,
     slice_width=TILE_SIZE,
-    overlap_height_ratio=OVERLAP,
-    overlap_width_ratio=OVERLAP
+    overlap_height_ratio=TILE_OVERLAP,
+    overlap_width_ratio=TILE_OVERLAP
 )

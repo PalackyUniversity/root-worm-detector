@@ -1,4 +1,5 @@
 from ultralytics import YOLO
+from shared import *
 import os
 
 # Load a model pre-trained on COCO
@@ -8,7 +9,7 @@ model = YOLO("yolo11m-seg.pt")
 results = model.train(
     data="dataset.yaml",
     epochs=400,
-    imgsz=640,
+    imgsz=TILE_SIZE,
     batch=24,  # set based on your VRAM
     workers=os.cpu_count(),
     pretrained=True,  # start from COCO weights

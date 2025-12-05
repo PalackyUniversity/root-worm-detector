@@ -4,10 +4,11 @@ Shared paths to make the run of individual scripts easier. Edit based on your ne
 
 import os
 
+# Shared paths
+WORKING_DIR = "/media/tadeas/Data4/root-worm-detector-repa/"
 
-WORKING_DIR = "."
-
-IMAGES_DIR = os.path.join(WORKING_DIR, "data")
+IMAGES_DIR = os.path.join(WORKING_DIR, "data")  # train + val
+IMAGES_TEST_DIR = os.path.join(WORKING_DIR, "data-test")  # test (doesn't have to have annotations)
 IMAGES_SLICED_DIR = os.path.join(WORKING_DIR, "data-sliced")
 
 ANNOTATIONS_COCO_FILE = os.path.join(IMAGES_DIR, "output.json")
@@ -21,3 +22,7 @@ IMAGES_VAL_DIR = os.path.join(WORKING_DIR, "images/val")
 IMAGES_TRAIN_DIR = os.path.join(WORKING_DIR, "images/train")
 ANNOTATIONS_VAL_DIR = os.path.join(WORKING_DIR, "labels/val")
 ANNOTATIONS_TRAIN_DIR = os.path.join(WORKING_DIR, "labels/train")
+
+# Shared constants
+TILE_SIZE = 640
+TILE_OVERLAP = 0.2
