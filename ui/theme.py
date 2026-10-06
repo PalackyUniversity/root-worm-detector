@@ -2,7 +2,9 @@
 
 from pathlib import Path
 
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QColor, QPalette
+from PySide6.QtWidgets import QMenu
 
 
 def blend(base: QColor, accent: QColor, amount: float) -> QColor:
@@ -236,8 +238,23 @@ def application_stylesheet(palette: QPalette) -> str:
     """
 
 
+class _MenuTransparency(QObject):
+    """Give rounded menu backgrounds a transparent native popup surface."""
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.Polish and isinstance(watched, QMenu):
+            # Configure before the native window is shown, including submenus
+            # and menus owned by buttons such as Import.
+            watched.setWindowFlag(Qt.FramelessWindowHint, True)
+            watched.setAttribute(Qt.WA_TranslucentBackground, True)
+        return False
+
+
 def apply_theme(app):
     """Style every window and popup, and follow system palette changes."""
+    if not hasattr(app, "_menu_transparency"):
+        app._menu_transparency = _MenuTransparency(app)
+        app.installEventFilter(app._menu_transparency)
     app.setStyle("Fusion")
     app.setStyleSheet(application_stylesheet(app.palette()))
     app.paletteChanged.connect(lambda palette: app.setStyleSheet(application_stylesheet(palette)))
