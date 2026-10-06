@@ -116,12 +116,10 @@ class ImagePreview(QLabel):
             color = QColor(0, 255, 0) if nice is True else QColor(255, 165, 0)
             if nice is None:
                 color = QColor(190, 190, 190)
-            if i in self.selected:
-                color = QColor(255, 50, 50)
             anchor = transform.map(center)
             small = max(screen_bounds.width(), screen_bounds.height()) < 7
             if self.show_contours:
-                if self.crosses or small:
+                if (self.crosses or small) and i not in self.selected:
                     # Reuse a tiny raster symbol instead of stroking thousands of
                     # subpixel polygons. Its size stays constant in screen pixels.
                     dpr = self.devicePixelRatioF()
@@ -159,7 +157,8 @@ class ImagePreview(QLabel):
                     painter.setBrush(Qt.NoBrush)
                     painter.setPen(QPen(QColor(0, 0, 0, 180), 4))
                     painter.drawPath(overlay)
-                    painter.setPen(QPen(color, 2))
+                    painter.setPen(QPen(selection_color if i in self.selected else color,
+                                        2.5 if i in self.selected else 2))
                     painter.drawPath(overlay)
             # Avoid a carpet of overlapping numbers in the plate overview.
             if (self.show_scores and i < len(scores) and scores[i] is not None

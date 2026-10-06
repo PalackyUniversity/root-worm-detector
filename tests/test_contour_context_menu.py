@@ -90,6 +90,29 @@ class ContourContextTests(unittest.TestCase):
         self.assertGreaterEqual(values.count('Not available'), 3)
         dialog.close()
 
+    def test_selected_outline_uses_accent_without_bounding_box(self):
+        from PySide6.QtGui import QPalette
+        self.window._MainWindow__group_selected_indices = [0]
+        self.window._show_confidences = False
+        self.window.update_preview()
+        self.app.processEvents()
+        label = self.window.label_image
+        def screen(x, y):
+            if hasattr(label, 'widget_point'):
+                return label.widget_point(QPointF(x, y)).toPoint()
+            pixmap = label.pixmap()
+            scale = self.window._MainWindow__effective_scale
+            return QPointF(x * scale + (label.width() - pixmap.width()) / 2,
+                           y * scale + (label.height() - pixmap.height()) / 2).toPoint()
+        shot = label.grab().toImage()
+        accent = label.palette().color(QPalette.Highlight)
+        edge = shot.pixelColor(screen(20, 30))
+        self.assertLess(abs(edge.red() - accent.red()), 5)
+        self.assertLess(abs(edge.green() - accent.green()), 5)
+        self.assertLess(abs(edge.blue() - accent.blue()), 5)
+        outside = shot.pixelColor(screen(14, 30))
+        self.assertEqual((outside.red(), outside.green(), outside.blue()), (0, 0, 0))
+
     def test_context_removal_and_undo_keep_probability_records_aligned(self):
         self.open_menu('Remove Contour')
         self.assertEqual(self.data['contours'], [])
