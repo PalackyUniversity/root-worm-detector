@@ -23,10 +23,16 @@ class ImageRowDelegate(QStyledItemDelegate):
         self.initStyleOption(row, index)
         view = self.parent()
         text_rect = view.style().subElementRect(QStyle.SE_ItemViewItemText, row, view)
+        completed = bool(index.data(Qt.UserRole))
+        tick_x = row.rect.right() - 15
+        if completed:
+            # Reserve the tick's actual bounds plus a small text gap, accounting
+            # for the padding already supplied by the item style.
+            text_rect.setRight(min(text_rect.right(), tick_x - 8))
         row.text = row.fontMetrics.elidedText(
-            row.text, Qt.ElideRight, max(0, text_rect.width() - 30))
+            row.text, Qt.ElideRight, max(0, text_rect.width()))
         view.style().drawControl(QStyle.CE_ItemViewItem, row, painter, view)
-        if not index.data(Qt.UserRole):
+        if not completed:
             return
         light = row.palette.color(QPalette.Base).lightness() >= 128
         color = (row.palette.color(QPalette.HighlightedText)
@@ -34,7 +40,7 @@ class ImageRowDelegate(QStyledItemDelegate):
                  else QColor('#237a45' if light else '#74c69d'))
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
-        painter.translate(row.rect.right() - 15, row.rect.center().y())
+        painter.translate(tick_x, row.rect.center().y())
         painter.setPen(QPen(color, 1.6, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.setBrush(Qt.NoBrush)
         path = QPainterPath()
