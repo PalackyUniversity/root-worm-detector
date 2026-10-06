@@ -1,6 +1,6 @@
 import os
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPalette, QPen
 from PySide6.QtWidgets import (QListWidget, QMenu, QPushButton, QStyle,
                                QStyledItemDelegate, QStyleOptionViewItem, QVBoxLayout)
@@ -24,23 +24,33 @@ class ImageRowDelegate(QStyledItemDelegate):
         view = self.parent()
         text_rect = view.style().subElementRect(QStyle.SE_ItemViewItemText, row, view)
         completed = bool(index.data(Qt.UserRole))
+        processing = bool(index.data(Qt.UserRole + 2))
         tick_x = row.rect.right() - 15
-        if completed:
-            # Reserve the tick's actual bounds plus a small text gap, accounting
+        if completed or processing:
+            # Reserve the status mark's bounds plus a small text gap, accounting
             # for the padding already supplied by the item style.
             text_rect.setRight(min(text_rect.right(), tick_x - 8))
         row.text = row.fontMetrics.elidedText(
             row.text, Qt.ElideRight, max(0, text_rect.width()))
         view.style().drawControl(QStyle.CE_ItemViewItem, row, painter, view)
-        if not completed:
+        if not (completed or processing):
             return
         light = row.palette.color(QPalette.Base).lightness() >= 128
+        status_color = (QColor('#1766a5' if light else '#80bfff') if processing
+                        else QColor('#237a45' if light else '#74c69d'))
         color = (row.palette.color(QPalette.HighlightedText)
-                 if row.state & QStyle.State_Selected
-                 else QColor('#237a45' if light else '#74c69d'))
+                 if row.state & QStyle.State_Selected else status_color)
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
         painter.translate(tick_x, row.rect.center().y())
+        if processing:
+            # Paint the ellipsis to keep the same size across fonts/platforms.
+            painter.setPen(Qt.NoPen)
+            painter.setBrush(color)
+            for x in (-4, 0, 4):
+                painter.drawEllipse(QPointF(x, 0), 1.1, 1.1)
+            painter.restore()
+            return
         painter.setPen(QPen(color, 1.6, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
         painter.setBrush(Qt.NoBrush)
         path = QPainterPath()

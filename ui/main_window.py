@@ -494,8 +494,7 @@ class MainWindow(QMainWindow):
                     item.setData(Qt.UserRole + 1, data["path"])
                     item.setToolTip(data["path"])
 
-                    if data.get("processing", False):
-                        item.setIcon(Icons.create_loading_icon())
+                    item.setData(Qt.UserRole + 2, data.get("processing", False))
                     item.setData(Qt.UserRole, data.get("predicted", False) and not data.get("processing", False))
 
                     self.panel_image_list.addItem(item)
