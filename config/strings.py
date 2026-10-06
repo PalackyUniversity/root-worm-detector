@@ -5,6 +5,7 @@ class Strings:
     # Button texts & tooltips
     ADD_CONTOUR = "Add Contour"
     REMOVE_CONTOUR = "Remove Contour"
+    PAN = "Pan image"
     GROUP_SELECT = "Group Select"
     CROSS_PREVIEW_TOOLTIP = "Toggle dot preview mode for contours"
     PREDICT = "Predict"

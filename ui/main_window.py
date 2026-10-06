@@ -1,8 +1,8 @@
-from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
                                QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
                                QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar)
 from PySide6.QtGui import QImage, QPixmap, QMouseEvent, QAction, QUndoStack, QPainter, QPalette, QColor, QPen
-from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QRectF, QSignalBlocker
+from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QRectF, QSize, QSignalBlocker
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
 from logic.image_logic import ImageLogic
@@ -58,7 +58,7 @@ class MainWindow(QMainWindow):
 
         # Add contour button
         self.button_contour_add = QPushButton()
-        self.button_contour_add.setIcon(Icons.create_plus_icon())
+        self.button_contour_add.setIcon(Icons.create_draw_icon())
         self.button_contour_add.setToolTip(Strings.ADD_CONTOUR)
         self.button_contour_add.setCheckable(True)
         self.button_contour_add.clicked.connect(self.start_drawing)
@@ -76,12 +76,13 @@ class MainWindow(QMainWindow):
         self.button_group_select.setCheckable(True)
         self.button_group_select.clicked.connect(self.start_group_selection)
 
-        # Cross view button
-        self.button_cross_view = QPushButton()
-        self.button_cross_view.setIcon(Icons.create_dot_icon())
-        self.button_cross_view.setToolTip(Strings.CROSS_PREVIEW_TOOLTIP)
-        self.button_cross_view.setCheckable(True)
-        self.button_cross_view.clicked.connect(self.toggle_cross_preview)
+        # Navigation tools are explicit; pan is the initial mode.
+        self.button_pan = QPushButton()
+        self.button_pan.setIcon(Icons.create_pan_icon())
+        self.button_pan.setToolTip(Strings.PAN)
+        self.button_pan.setCheckable(True)
+        self.button_pan.setChecked(True)
+        self.button_pan.clicked.connect(self.start_panning)
 
         # Predict button
         self.button_predict = QPushButton(Strings.PREDICT)
@@ -95,21 +96,25 @@ class MainWindow(QMainWindow):
         self.button_cancel.clicked.connect(self.cancel_prediction_process)
 
         # Zoom out button
-        self.button_zoom_out = QPushButton(Strings.ZOOM_OUT_SYMBOL)
+        self.button_zoom_out = QPushButton()
+        self.button_zoom_out.setIcon(Icons.create_zoom_out_icon())
         self.button_zoom_out.setToolTip(Strings.ZOOM_OUT)
         self.button_zoom_out.setFixedWidth(32)
         self.button_zoom_out.clicked.connect(self.zoom_step_out)
 
         # Zoom in button
-        self.button_zoom_in = QPushButton(Strings.ZOOM_IN_SYMBOL)
+        self.button_zoom_in = QPushButton()
+        self.button_zoom_in.setIcon(Icons.create_zoom_in_icon())
         self.button_zoom_in.setToolTip(Strings.ZOOM_IN)
         self.button_zoom_in.setFixedWidth(32)
         self.button_zoom_in.clicked.connect(self.zoom_step_in)
 
         for button in (self.button_contour_add, self.button_contour_remove,
-                       self.button_group_select, self.button_cross_view,
+                       self.button_group_select, self.button_pan,
                        self.button_zoom_out, self.button_zoom_in):
             button.setProperty("iconButton", True)
+            button.setIconSize(QSize(18, 18))
+            button.setAccessibleName(button.toolTip())
 
         # Zoom label
         self.label_zoom = QLabel("100%")
@@ -119,6 +124,7 @@ class MainWindow(QMainWindow):
         self.label_image.setAlignment(Qt.AlignCenter)
         self.label_image.setContextMenuPolicy(Qt.CustomContextMenu)
         self.label_image.customContextMenuRequested.connect(self.show_preview_context_menu)
+        self.label_image.setCursor(Qt.OpenHandCursor)
         self.label_image.mousePressEvent = self.preview_mouse_press
         self.label_image.mouseMoveEvent = self.preview_mouse_move
         self.label_image.mouseReleaseEvent = self.preview_mouse_release
@@ -136,6 +142,8 @@ class MainWindow(QMainWindow):
         self.panel_image = QScrollArea()
         self.panel_image.setWidget(self.label_image)
         self.panel_image.setWidgetResizable(True)
+        self.panel_image.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.panel_image.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         # Progress bar
         self.progress_bar = QProgressBar()
@@ -148,21 +156,20 @@ class MainWindow(QMainWindow):
         self.label_time_remaining.setVisible(False)
         self._progress_started = None
 
-        # Middle panel
+        # Right toolbar stays at its preferred width outside the splitter.
         panel_tool = QWidget()
-        panel_tool.setMaximumWidth(100)
+        panel_tool.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         panel_tool_layout = QVBoxLayout(panel_tool)
         panel_tool_layout.setContentsMargins(0, 0, 0, 0)
+        panel_tool_layout.addWidget(self.button_pan)
+        panel_tool_layout.addWidget(self.button_group_select)
         panel_tool_layout.addWidget(self.button_contour_add)
         panel_tool_layout.addWidget(self.button_contour_remove)
-        panel_tool_layout.addWidget(self.button_group_select)
-        panel_tool_layout.addWidget(self.button_cross_view)
         panel_tool_layout.addStretch()
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(self.panel_image_list)
         splitter.addWidget(self.panel_image)
-        splitter.addWidget(panel_tool)
         splitter.setStretchFactor(1, 1)
 
         # Match Root Tracker's status bar: zoom left, progress and actions right.
@@ -180,8 +187,9 @@ class MainWindow(QMainWindow):
         status_bar.addPermanentWidget(self.button_cancel)
 
         central = QWidget()
-        main_layout = QVBoxLayout(central)
-        main_layout.addWidget(splitter)
+        main_layout = QHBoxLayout(central)
+        main_layout.addWidget(splitter, 1)
+        main_layout.addWidget(panel_tool)
         self.setCentralWidget(central)
 
         # Menu -> File -> Import files
@@ -375,25 +383,34 @@ class MainWindow(QMainWindow):
 
         context.exec(self.label_image.mapToGlobal(pos))
 
-    def start_group_selection(self):
+    def _set_preview_tool(self, tool):
+        self.__drawing = tool == "draw"
+        self.__group_select_active = tool == "select"
+        self.button_pan.setChecked(tool == "pan")
+        self.button_group_select.setChecked(self.__group_select_active)
+        self.button_contour_add.setChecked(self.__drawing)
+        self.__current_contour = []
+        self.__group_selected_indices = []
+        self.__group_selection_start = None
+        self.__group_selection_rect = None
+        self.__selection_press_position = None
+        self.__selection_dragged = False
+        self._panning = self._pan_maybe = False
+        self._pan_start_pos = self._pan_start_scroll = None
+        self.label_image.setCursor(Qt.OpenHandCursor if tool == "pan" else Qt.CrossCursor)
         self.update_preview()
-        if self.__drawing or self.__drawing:
-            self.__drawing = False
-            self.button_contour_add.setChecked(False)
-            self.label_image.setCursor(Qt.ArrowCursor)
+        self.update_controls()
 
-        # Toggle group selection mode.
-        if self.__group_select_active:
-            self.__group_select_active = False
-            self.button_group_select.setChecked(False)
-            self.__group_selected_indices = []
-        else:
-            self.__group_select_active = True
-            self.button_group_select.setChecked(True)
+    def start_panning(self):
+        self._set_preview_tool("pan")
+
+    def start_group_selection(self):
+        self._set_preview_tool("select")
 
     def clear_group_selection(self):
         self.__group_selected_indices = []
         self.update_preview()
+        self.update_controls()
 
     def import_files(self):
         files, _ = QFileDialog.getOpenFileNames(self, Strings.SELECT_IMAGES, "", Config.IMAGE_EXTENSIONS_FILTER)
@@ -514,6 +531,10 @@ class MainWindow(QMainWindow):
         self._preview_data = None
 
     def update_preview(self):
+        has_image = 0 <= self.__current_index < len(self.__image_data)
+        scroll_policy = Qt.ScrollBarAlwaysOn if has_image else Qt.ScrollBarAlwaysOff
+        self.panel_image.setHorizontalScrollBarPolicy(scroll_policy)
+        self.panel_image.setVerticalScrollBarPolicy(scroll_policy)
         if self.__current_index < 0 or self.__current_index >= len(self.__image_data):
             self._release_preview()
             self.label_image.setText(Strings.IMAGE_PREVIEW)
@@ -674,40 +695,13 @@ class MainWindow(QMainWindow):
         self.__cancel_prediction = True
 
     def start_drawing(self):
-        # Immediately clear any selected contour when clicking Add Contour.
-        self.__group_selected_indices = []
-        self.update_preview()
-
-        if self.__drawing:
-            # Deselect contour addition
-            self.__drawing = False
-            self.button_contour_add.setChecked(False)
-            self.label_image.setCursor(Qt.ArrowCursor)
-
-        else:
-            # Cancel group selection if active.
-            if self.__group_select_active:
-                self.__group_select_active = False
-                self.button_group_select.setChecked(False)
-                self.__group_selection_start = None
-                self.__group_selection_rect = None
-                self.__group_selected_indices = []
-
-            self.__drawing = True
-            self.__current_contour = []
-            self.button_contour_add.setChecked(True)
-            self.label_image.setCursor(Qt.CrossCursor)
-
-    def toggle_cross_preview(self):
-        self.__cross_preview_mode = self.button_cross_view.isChecked()
-        self.__toggle_cross_preview_common()
+        self._set_preview_tool("pan" if self.__drawing else "draw")
 
     def toggle_cross_preview_from_menu(self):
         self.__cross_preview_mode = self.menu_toggle_cross_preview.isChecked()
         self.__toggle_cross_preview_common()
 
     def __toggle_cross_preview_common(self):
-        self.button_cross_view.setChecked(self.__cross_preview_mode)
         self.menu_toggle_cross_preview.setChecked(self.__cross_preview_mode)
 
         self.update_preview()
@@ -732,21 +726,8 @@ class MainWindow(QMainWindow):
             self.update_preview()
             return
 
-        # Otherwise, perform manual selection: clear any group selection.
-        data = self.__image_data[self.__current_index]
-        selected = False
-        for i, cnt in enumerate(data["contours"]):
-            if cv2.pointPolygonTest(cnt, (pt.x(), pt.y()), False) >= 0:
-                self.__group_selected_indices = [i]
-                selected = True
-                break
-        if not selected:
-            self.__group_selected_indices = []
-        self.update_preview()
-        self.update_controls()
-
-        # Prepare for possible panning, but don't start panning yet
-        if not self.__drawing and not self.__group_select_active and event.button() == Qt.LeftButton:
+        # Pan mode only moves the viewport; selection belongs to its own tool.
+        if self.button_pan.isChecked():
             self._pan_maybe = True
             self._pan_start_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
             self._pan_start_scroll = (
@@ -796,7 +777,7 @@ class MainWindow(QMainWindow):
         if self._panning or self._pan_maybe:
             self._panning = False
             self._pan_maybe = False
-            self.label_image.setCursor(Qt.ArrowCursor)
+            self.label_image.setCursor(Qt.OpenHandCursor)
             self._pan_start_pos = None
             self._pan_start_scroll = None
             return
@@ -905,10 +886,11 @@ class MainWindow(QMainWindow):
         self.menu_export.setEnabled(has_images and all(d.get("predicted", False) for d in self.__image_data))
 
         self.button_contour_add.setEnabled(has_images)
+        self.button_contour_remove.setVisible(bool(self.__group_selected_indices))
         self.button_contour_remove.setEnabled(has_images and len(self.__group_selected_indices) > 0)
         self.menu_add_contour.setEnabled(has_images)
         self.menu_remove_contour.setEnabled(has_images and len(self.__group_selected_indices) > 0)
-        self.button_cross_view.setEnabled(has_images)
+        self.button_pan.setEnabled(has_images)
 
         # Disable group selection button if no image is selected.
         self.button_group_select.setEnabled(has_images)
