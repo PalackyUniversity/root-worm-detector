@@ -354,10 +354,24 @@ class MainWindow(QMainWindow):
 
         # Menu setup - Model
         menu_model.addMenu(Strings.SELECT_MODEL).addActions(self.model_action_group.actions())
-        self.menu_default_dpi = QAction(self)
-        self.menu_default_dpi.triggered.connect(self.choose_default_dpi)
+        dpi_menu = menu_model.addMenu("")
+        self.menu_default_dpi = dpi_menu.menuAction()
+        self.default_dpi_group = QActionGroup(self)
+        self.default_dpi_group.setExclusive(True)
+        self.default_dpi_actions = {}
+        for dpi in (None, 600, 720, 1200):
+            label = Strings.DPI_NONE if dpi is None else Strings.DPI_PRESET.format(value=dpi)
+            action = dpi_menu.addAction(label)
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked=False, value=dpi: self.set_default_dpi(value))
+            self.default_dpi_group.addAction(action)
+            self.default_dpi_actions[dpi] = action
+        dpi_menu.addSeparator()
+        self.custom_default_dpi_action = dpi_menu.addAction(Strings.DPI_CUSTOM)
+        self.custom_default_dpi_action.setCheckable(True)
+        self.default_dpi_group.addAction(self.custom_default_dpi_action)
+        self.custom_default_dpi_action.triggered.connect(self.choose_default_dpi)
         self._update_default_dpi_label()
-        menu_model.addAction(self.menu_default_dpi)
         menu_model.addSeparator()
         menu_model.addAction(self.menu_start_prediction)
         menu_model.addAction(self.menu_repredict)
@@ -424,6 +438,8 @@ class MainWindow(QMainWindow):
 
     def _update_default_dpi_label(self):
         self.menu_default_dpi.setText(Strings.DEFAULT_DPI.format(value=self._default_dpi or Strings.DPI_NONE))
+        selected = self.default_dpi_actions.get(self._default_dpi, self.custom_default_dpi_action)
+        selected.setChecked(True)
 
     def _resolve_dpi(self, data):
         dpi = data.get("dpi_override") or data.get("detected_dpi") or self._default_dpi
@@ -445,9 +461,10 @@ class MainWindow(QMainWindow):
 
     def choose_default_dpi(self):
         dpi, ok = QInputDialog.getInt(self, Strings.MENU_MODEL, Strings.DEFAULT_DPI_PROMPT,
-                                     self._default_dpi or 0, 0, 100000)
+                                     self._default_dpi or 600, 1, 100000)
         if ok:
-            self.set_default_dpi(dpi or None)
+            self.set_default_dpi(dpi)
+        self._update_default_dpi_label()
 
     def set_image_dpi(self, row, dpi):
         if self._prediction_thread is not None or self._invalidation_thread is not None:

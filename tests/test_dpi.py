@@ -137,3 +137,35 @@ class DpiTests(unittest.TestCase):
             window.close()
             window.deleteLater()
             self.app.processEvents()
+
+    def test_default_menu_presets_none_and_custom_cancel(self):
+        from unittest.mock import patch
+        from config.strings import Strings
+        window = MainWindow(settings=self.settings)
+        try:
+            window.load_files([self.path])
+            menu = window.menu_default_dpi.menu()
+            self.assertIsNotNone(menu)
+            actions = {a.text(): a for a in menu.actions() if not a.isSeparator()}
+            self.assertTrue(actions[Strings.DPI_NONE].isChecked())
+            actions['720 DPI'].trigger()
+            self.assertEqual(window._MainWindow__image_data[0]['dpi'], 720)
+            self.assertTrue(actions['720 DPI'].isChecked())
+            self.assertTrue(window.button_predict.isEnabled())
+            with patch('ui.main_window.QInputDialog.getInt', return_value=(900, False)):
+                actions[Strings.DPI_CUSTOM].trigger()
+            self.assertEqual(window._default_dpi, 720)
+            self.assertTrue(actions['720 DPI'].isChecked())
+            with patch('ui.main_window.QInputDialog.getInt', return_value=(900, True)) as dialog:
+                actions[Strings.DPI_CUSTOM].trigger()
+                self.assertEqual(dialog.call_args.args[4], 1)
+            self.assertEqual(window._MainWindow__image_data[0]['dpi'], 900)
+            self.assertTrue(actions[Strings.DPI_CUSTOM].isChecked())
+            actions[Strings.DPI_NONE].trigger()
+            self.assertIsNone(window._default_dpi)
+            self.assertFalse(window.button_predict.isEnabled())
+            self.assertTrue(actions[Strings.DPI_NONE].isChecked())
+        finally:
+            window.close()
+            window.deleteLater()
+            self.app.processEvents()
