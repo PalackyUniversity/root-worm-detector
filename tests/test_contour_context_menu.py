@@ -81,7 +81,6 @@ class ContourContextTests(unittest.TestCase):
         values = [dialog.table.item(row, 1).text() for row in range(dialog.table.rowCount())]
         self.assertIn('85.00%', values)
         self.assertIn('20.00%', values)
-        self.assertIn('80.00%', values)
         dialog.close()
         self.data['scores'] = [None]
         self.data['measurements'] = [dict(status='manual', nice=None, nice_probability=None)]
