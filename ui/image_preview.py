@@ -2,6 +2,7 @@
 import math
 
 import cv2
+from logic.image_logic import ImageLogic
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import QColor, QImage, QPainter, QPainterPath, QPalette, QPen, QPixmap, QTransform
 from PySide6.QtWidgets import QLabel
@@ -42,22 +43,23 @@ class ImagePreview(QLabel):
         contours = tuple(data.get('contours', ()))
         if len(contours) != len(self._contours) or any(a is not b for a, b in zip(contours, self._contours)):
             self._contours = contours
-            self._geometry = []
-            for contour in contours:
-                points = contour.reshape(-1, 2)
-                path = QPainterPath()
-                if len(points):
-                    path.moveTo(float(points[0][0]), float(points[0][1]))
-                    for x, y in points[1:]:
-                        path.lineTo(float(x), float(y))
-                    path.closeSubpath()
-                    moments = cv2.moments(contour)
-                    center = (QPointF(moments['m10'] / moments['m00'], moments['m01'] / moments['m00'])
-                              if moments['m00'] else QPointF(float(points[0][0]), float(points[0][1])))
-                else:
-                    center = QPointF()
-                self._geometry.append((path, path.boundingRect(), center))
+            self._geometry = [self._contour_geometry(contour) for contour in contours]
         return changed
+
+    @staticmethod
+    def _contour_geometry(contour):
+        points = contour.reshape(-1, 2)
+        path = QPainterPath()
+        center = QPointF()
+        if len(points):
+            path.moveTo(float(points[0][0]), float(points[0][1]))
+            for x, y in points[1:]:
+                path.lineTo(float(x), float(y))
+            path.closeSubpath()
+            moments = cv2.moments(contour)
+            center = (QPointF(moments['m10'] / moments['m00'], moments['m01'] / moments['m00'])
+                      if moments['m00'] else QPointF(float(points[0][0]), float(points[0][1])))
+        return path, path.boundingRect(), center
 
     def clear_image(self, text):
         self.data = self._source = None
@@ -108,14 +110,20 @@ class ImagePreview(QLabel):
         font = painter.font()
         font.setPixelSize(12)
         painter.setFont(font)
-        for i, (path, bounds, center) in enumerate(self._geometry):
+        geometry = self._geometry
+        if self.drawing:
+            contour = ImageLogic.manual_contour_geometry(self.drawing)
+            geometry = [*geometry, self._contour_geometry(contour)]
+        for i, (path, bounds, center) in enumerate(geometry):
             screen_bounds = transform.mapRect(bounds)
             if not visible.intersects(screen_bounds.adjusted(-5, -5, 5, 5)):
                 continue
             nice = records[i].get('nice') if i < len(records) else None
-            color = QColor(0, 255, 0) if nice is True else QColor(255, 165, 0)
+            color = QColor(0, 255, 0) if nice is True else QColor(255, 0, 0)
             if nice is None:
                 color = QColor(190, 190, 190)
+            if i in self.selected:
+                color = selection_color
             anchor = transform.map(center)
             small = max(screen_bounds.width(), screen_bounds.height()) < 7
             if self.show_contours:
@@ -157,8 +165,7 @@ class ImagePreview(QLabel):
                     painter.setBrush(Qt.NoBrush)
                     painter.setPen(QPen(QColor(0, 0, 0, 180), 4))
                     painter.drawPath(overlay)
-                    painter.setPen(QPen(selection_color if i in self.selected else color,
-                                        2.5 if i in self.selected else 2))
+                    painter.setPen(QPen(color, 2.5 if i in self.selected else 2))
                     painter.drawPath(overlay)
             # Avoid a carpet of overlapping numbers in the plate overview.
             if (self.show_scores and i < len(scores) and scores[i] is not None
@@ -170,15 +177,6 @@ class ImagePreview(QLabel):
                 painter.fillRect(rect, QColor(0, 0, 0, 180))
                 painter.setPen(color)
                 painter.drawText(rect, Qt.AlignCenter, text)
-        if self.drawing:
-            path = QPainterPath()
-            path.moveTo(transform.map(QPointF(*self.drawing[0])))
-            for point in self.drawing[1:]:
-                path.lineTo(transform.map(QPointF(*point)))
-            if len(self.drawing) == 1:
-                path.addEllipse(transform.map(QPointF(*self.drawing[0])), 4, 4)
-            painter.setPen(QPen(QColor(0, 100, 255), 2))
-            painter.drawPath(path)
         if self.selection_rect is not None:
             rect = transform.mapRect(QRectF(self.selection_rect))
             accent = selection_color

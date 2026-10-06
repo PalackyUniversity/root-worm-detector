@@ -159,10 +159,64 @@ class PreviewTests(unittest.TestCase):
                         self.assertEqual(after[axis] - before[axis], -25)
                     self.assertEqual(self.window._MainWindow__effective_scale, scale)
 
+    def select_gesture(self, image_point, offset=QPointF()):
+        self.window.start_group_selection()
+        label = self.window.label_image
+        start = label.widget_point(QPointF(*image_point))
+        for kind, point, button, buttons in [
+            (QMouseEvent.MouseButtonPress, start, Qt.LeftButton, Qt.LeftButton),
+            (QMouseEvent.MouseMove, start + offset, Qt.NoButton, Qt.LeftButton),
+            (QMouseEvent.MouseButtonRelease, start + offset, Qt.LeftButton, Qt.NoButton),
+        ]:
+            event = QMouseEvent(kind, point, point, button, buttons, Qt.NoModifier)
+            {QMouseEvent.MouseButtonPress: self.window.preview_mouse_press,
+             QMouseEvent.MouseMove: self.window.preview_mouse_move,
+             QMouseEvent.MouseButtonRelease: self.window.preview_mouse_release}[kind](event)
 
+    def test_selection_click_tolerates_small_screen_movement_at_fit(self):
+        self.select_gesture((1850, 1350), QPointF(2, 2))
+        self.assertEqual(self.window._MainWindow__group_selected_indices, [0])
 
+    def test_selection_click_accepts_near_edge_at_different_zoom_levels(self):
+        for zoom in (0.5, 4):
+            self.window.zoom(zoom)
+            scale = self.window._MainWindow__effective_scale
+            self.select_gesture((1800 - 3 / scale, 1500))
+            self.assertEqual(self.window._MainWindow__group_selected_indices, [0])
+            self.select_gesture((1800 - 12 / scale, 1500))
+            self.assertEqual(self.window._MainWindow__group_selected_indices, [])
 
+    def test_selection_drag_still_selects_centroids_inside_rectangle(self):
+        scale = self.window._MainWindow__effective_scale
+        self.select_gesture((1700, 1200), QPointF(600 * scale, 600 * scale))
+        self.assertEqual(self.window._MainWindow__group_selected_indices, [0])
+        self.assertIsNone(self.window.label_image.selection_rect)
 
+    def test_alt_drag_in_selection_pans_without_changing_selection(self):
+        self.window.start_group_selection()
+        self.window._MainWindow__group_selected_indices = [0]
+        label = self.window.label_image
+        h = self.window.panel_image.horizontalScrollBar()
+        v = self.window.panel_image.verticalScrollBar()
+        before = (h.value(), v.value())
+        start = label.widget_point(QPointF(2000, 1500))
+        for kind, point, button, buttons, modifiers in [
+            (QMouseEvent.MouseButtonPress, start, Qt.LeftButton, Qt.LeftButton, Qt.AltModifier),
+            (QMouseEvent.MouseMove, start + QPointF(60, 40), Qt.NoButton, Qt.LeftButton, Qt.AltModifier),
+            # Releasing Alt before the mouse must still finish the pan.
+            (QMouseEvent.MouseButtonRelease, start + QPointF(60, 40), Qt.LeftButton, Qt.NoButton, Qt.NoModifier),
+        ]:
+            event = QMouseEvent(kind, point, point, button, buttons, modifiers)
+            {QMouseEvent.MouseButtonPress: self.window.preview_mouse_press,
+             QMouseEvent.MouseMove: self.window.preview_mouse_move,
+             QMouseEvent.MouseButtonRelease: self.window.preview_mouse_release}[kind](event)
+        self.assertEqual((h.value(), v.value()), (before[0] - 60, before[1] - 40))
+        self.assertEqual(self.window._MainWindow__group_selected_indices, [0])
+        self.assertTrue(self.window.button_group_select.isChecked())
+        self.assertEqual(label.cursor().shape(), Qt.CrossCursor)
+        self.assertIsNone(label.selection_rect)
+        self.select_gesture((1850, 1350))
+        self.assertEqual(self.window._MainWindow__group_selected_indices, [0])
 
     def test_max_zoom_uses_actual_image_scale_at_any_window_size(self):
         from config.general import Config

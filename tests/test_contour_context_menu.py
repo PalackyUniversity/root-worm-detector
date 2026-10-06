@@ -62,6 +62,35 @@ class ContourContextTests(unittest.TestCase):
         self.assertTrue(actions['Remove Contour'].isEnabled())
         self.assertEqual(self.window._MainWindow__group_selected_indices, [0])
 
+    def test_menu_only_offers_opposite_class(self):
+        self.assertNotIn('Mark not nice', self.open_menu())
+        self.open_menu('Mark nice')
+        self.assertNotIn('Mark nice', self.open_menu())
+        self.assertIn('Mark not nice', self.open_menu())
+
+    def test_reset_restores_deleted_objects_and_removes_manual_additions_after_reload(self):
+        from logic.commands import AddContourCommand, RemoveContoursCommand
+        from logic.image_logic import ImageLogic
+        stack = self.window._MainWindow__undo_stack
+        self.open_menu('Mark nice')
+        stack.push(RemoveContoursCommand(self.data, [0]))
+        stack.push(AddContourCommand(self.data, [(70, 70)]))
+        loaded = ImageLogic.load_image(self.data['path'])
+        self.window._MainWindow__image_data = [loaded]
+        self.window._MainWindow__group_selected_indices = []
+        self.window.update_controls()
+        self.assertTrue(self.window.button_restore_classification.isEnabled())
+        self.window.button_restore_classification.click()
+        self.assertEqual(len(loaded['contours']), 1)
+        self.assertEqual(loaded['scores'], [.85])
+        self.assertIs(loaded['measurements'][0]['nice'], False)
+        self.assertNotIn('nice_override', loaded['measurements'][0])
+        stack.undo()
+        self.assertEqual(loaded['measurements'][0]['status'], 'manual')
+        stack.redo()
+        saved = ImageLogic.load_image(loaded['path'], load_pixels=False)
+        self.assertEqual(saved['scores'], [.85])
+
     def test_marking_from_context_menu_is_undoable_and_keeps_model_probability(self):
         self.open_menu('Mark nice')
         self.assertIs(self.data['measurements'][0]['nice'], True)

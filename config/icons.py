@@ -80,6 +80,9 @@ class _OutlineIconEngine(QIconEngine):
             line(6.5, 9.5, 12.5, 9.5)
             if self.symbol == 'zoom-in':
                 line(9.5, 6.5, 9.5, 12.5)
+        elif self.symbol == 'restore':
+            painter.drawArc(QRectF(5, 5, 15, 15), 140 * 16, -290 * 16)
+            path([(4, 4), (4, 10), (10, 10)])
         elif self.symbol == 'loading':
             painter.drawArc(QRectF(4, 4, 16, 16), 40 * 16, 280 * 16)
             path([(20, 4), (20, 9), (15, 9)])
@@ -89,6 +92,10 @@ class _OutlineIconEngine(QIconEngine):
 
 
 class Icons:
+    @classmethod
+    def create_restore_icon(cls):
+        return QIcon(_OutlineIconEngine('restore'))
+
     @classmethod
     def create_pan_icon(cls, size=24):
         return QIcon(_OutlineIconEngine('pan'))

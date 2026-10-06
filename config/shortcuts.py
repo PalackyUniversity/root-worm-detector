@@ -5,7 +5,8 @@ class Shortcuts:
     EXPORT = ["Ctrl+E"]
 
     # Contour modification
-    CONTOUR_ADD = ["Ctrl+A"]
+    CONTOUR_ADD = ["A"]
+    CONTOUR_SELECT_ALL = ["Ctrl+A"]
     CONTOUR_DELETE = ["Delete"]
     CONTOUR_GROUP_SELECT = ["Ctrl+G"]
     CLEAR_GROUP_SELECT = ["Ctrl+Shift+G"]

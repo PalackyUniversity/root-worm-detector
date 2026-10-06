@@ -1,17 +1,17 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
-                               QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
+                               QSplitter, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
                                QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar)
-from PySide6.QtGui import QMouseEvent, QAction, QUndoStack, QPainter, QPalette, QColor, QPen
-from PySide6.QtCore import Qt, QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSignalBlocker
+from PySide6.QtGui import QMouseEvent, QAction, QUndoStack
+from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QEvent, QSize, QSignalBlocker
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
 from logic.image_logic import ImageLogic
-from logic.commands import AddContourCommand, RemoveContoursCommand
+from logic.commands import AddContourCommand, RemoveContoursCommand, ReclassifyContoursCommand, ResetAnnotationsCommand
 from ui.draggable_image_list import DraggableImageList
 from ui.export_dialog import ExportDialog
 from ui.contour_properties_dialog import ContourPropertiesDialog
-from logic.contour_classification import MarkContoursCommand
 from ui.image_preview import ImagePreview
+from ui.prediction_worker import PredictionWorker
 from config.shortcuts import Shortcuts
 from config.strings import Strings
 from config.general import Config
@@ -41,7 +41,9 @@ class MainWindow(QMainWindow):
         self.__zoom_scale = None  # Fit automatically until the user zooms.
         self.__effective_scale = 1
         self.__cancel_prediction = False
-        self._prediction_running = False
+        self._prediction_thread = None
+        self._prediction_pending = []
+        self._close_after_prediction = False
         self.__cross_preview_mode = False
         self._show_confidences = True  # Add this line to store toggle state
         self._show_contours = True     # Add toggle state for contours visibility
@@ -72,6 +74,11 @@ class MainWindow(QMainWindow):
         self.button_contour_remove.setIcon(Icons.create_remove_icon())
         self.button_contour_remove.setToolTip(Strings.REMOVE_CONTOUR)
         self.button_contour_remove.clicked.connect(self.remove_selected_contour)
+
+        self.button_restore_classification = QPushButton()
+        self.button_restore_classification.setIcon(Icons.create_restore_icon())
+        self.button_restore_classification.setToolTip(Strings.RESTORE_CLASSIFICATION_TOOLTIP)
+        self.button_restore_classification.clicked.connect(self.reset_annotations)
 
         # Group selection button
         self.button_group_select = QPushButton()
@@ -115,17 +122,18 @@ class MainWindow(QMainWindow):
 
         for button in (self.button_contour_add, self.button_contour_remove,
                        self.button_group_select, self.button_pan,
-                       self.button_zoom_out, self.button_zoom_in):
+                       self.button_zoom_out, self.button_zoom_in, self.button_restore_classification):
             button.setProperty("iconButton", True)
             button.setIconSize(QSize(18, 18))
             button.setAccessibleName(button.toolTip())
 
         # Zoom label
         self.label_zoom = QLabel("100%")
+        self.label_measurements = QLabel()
+        self.label_measurements.setToolTip(Strings.MEASUREMENT_TOOLTIP)
 
         # Preview image label
         self.label_image = ImagePreview(Strings.IMAGE_PREVIEW)
-        self.label_image.setToolTip(Strings.PREVIEW_NAVIGATION_TOOLTIP)
         self.label_image.setAlignment(Qt.AlignCenter)
         self.label_image.setContextMenuPolicy(Qt.CustomContextMenu)
         self.label_image.customContextMenuRequested.connect(self.show_preview_context_menu)
@@ -134,7 +142,7 @@ class MainWindow(QMainWindow):
         self.label_image.mouseMoveEvent = self.preview_mouse_move
         self.label_image.mouseReleaseEvent = self.preview_mouse_release
 
-        # Enable wheel event on label_image for zooming
+        # Wheel navigation stays anchored to the image preview.
         self.label_image.wheelEvent = self.preview_wheel_event
 
         # Image list panel (pass self to DraggableImageList)
@@ -147,11 +155,12 @@ class MainWindow(QMainWindow):
         self.panel_image = QScrollArea()
         self.panel_image.setWidget(self.label_image)
         self.panel_image.setWidgetResizable(False)
-        self.panel_image.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.panel_image.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
-        self.panel_image.viewport().installEventFilter(self)
         self.panel_image.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.panel_image.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.panel_image.viewport().installEventFilter(self)
+        for bar in (self.panel_image.horizontalScrollBar(), self.panel_image.verticalScrollBar()):
+            bar.actionTriggered.connect(self._manual_view_interaction)
+            bar.sliderMoved.connect(self._manual_view_interaction)
 
         # Progress bar
         self.progress_bar = QProgressBar()
@@ -174,6 +183,7 @@ class MainWindow(QMainWindow):
         panel_tool_layout.addWidget(self.button_contour_add)
         panel_tool_layout.addWidget(self.button_contour_remove)
         panel_tool_layout.addStretch()
+        panel_tool_layout.addWidget(self.button_restore_classification)
 
         splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(self.panel_image_list)
@@ -188,6 +198,7 @@ class MainWindow(QMainWindow):
         status_bar.addWidget(self.button_zoom_out)
         status_bar.addWidget(self.button_zoom_in)
         status_bar.addWidget(self.label_zoom)
+        status_bar.addWidget(self.label_measurements)
         status_bar.addWidget(QWidget(), 1)
         status_bar.addPermanentWidget(self.label_time_remaining)
         status_bar.addPermanentWidget(self.progress_bar)
@@ -231,6 +242,10 @@ class MainWindow(QMainWindow):
         self.menu_add_contour = QAction(Strings.EDIT_ADD_CONTOUR, self)
         self.menu_add_contour.setShortcuts(Shortcuts.CONTOUR_ADD)
         self.menu_add_contour.triggered.connect(self.start_drawing)
+
+        self.menu_select_all_contours = QAction(Strings.EDIT_SELECT_ALL_CONTOURS, self)
+        self.menu_select_all_contours.setShortcuts(Shortcuts.CONTOUR_SELECT_ALL)
+        self.menu_select_all_contours.triggered.connect(self.select_all_contours)
 
         # Menu -> Edit -> Remove contour
         self.menu_remove_contour = QAction(Strings.EDIT_REMOVE_CONTOUR, self)
@@ -304,6 +319,7 @@ class MainWindow(QMainWindow):
         menu_edit.addSeparator()
         menu_edit.addAction(self.menu_add_contour)
         menu_edit.addAction(self.menu_remove_contour)
+        menu_edit.addAction(self.menu_select_all_contours)
 
         # Menu setup - Model
         menu_model.addAction(self.menu_start_prediction)
@@ -325,10 +341,35 @@ class MainWindow(QMainWindow):
         self.update_controls()
         self.update_undo_actions()
 
+        self.__undo_stack.indexChanged.connect(self._annotations_changed)
+
+    def _annotations_changed(self):
+        self.update_image_list()
+        self.update_preview()
+        self.update_controls()
+
+    def reclassify_selected(self, nice):
+        if self._prediction_thread is not None or self.__current_index < 0:
+            return
+        data = self.__image_data[self.__current_index]
+        indices = [index for index in self.__group_selected_indices if 0 <= index < len(data.get("measurements", []))]
+        if indices:
+            self.__undo_stack.push(ReclassifyContoursCommand(data, indices, nice))
+
+    def reset_annotations(self):
+        if self._prediction_thread is not None or self.__current_index < 0:
+            return
+        data = self.__image_data[self.__current_index]
+        self.__group_selected_indices = []
+        self.__current_contour = []
+        self.__group_selection_start = None
+        self.__group_selection_rect = None
+        self.__undo_stack.push(ResetAnnotationsCommand(data))
+
     def update_undo_actions(self):
         """Update the state of undo/redo actions based on undo stack state"""
-        self.menu_undo.setEnabled(self.__undo_stack.canUndo())
-        self.menu_redo.setEnabled(self.__undo_stack.canRedo())
+        self.menu_undo.setEnabled(self._prediction_thread is None and self.__undo_stack.canUndo())
+        self.menu_redo.setEnabled(self._prediction_thread is None and self.__undo_stack.canRedo())
         self.update_preview()  # TODO this is maybe called multiple times
 
     def show_about(self):
@@ -390,17 +431,22 @@ class MainWindow(QMainWindow):
         self.update_preview()
         self.update_controls()
         selected = bool(self.__group_selected_indices)
-        editable = selected and not self._prediction_running
+        editable = selected and self._prediction_thread is None
         context = QMenu(self)
         add = context.addAction(Strings.ADD_CONTOUR, self.start_drawing)
-        add.setEnabled(self.label_image.data is not None and not self._prediction_running)
+        add.setEnabled(self.label_image.data is not None and self._prediction_thread is None)
         context.addSeparator()
         remove = context.addAction(Strings.REMOVE_CONTOUR, self.remove_selected_contour)
         remove.setEnabled(editable)
-        mark_nice = context.addAction(Strings.MARK_NICE, lambda: self.reclassify_selected(True))
-        mark_nice.setEnabled(editable)
-        mark_not_nice = context.addAction(Strings.MARK_NOT_NICE, lambda: self.reclassify_selected(False))
-        mark_not_nice.setEnabled(editable)
+        records = self.label_image.data.get("measurements", []) if self.label_image.data else []
+        classes = [records[i].get("nice") if i < len(records) else None
+                   for i in self.__group_selected_indices]
+        if any(value is not True for value in classes):
+            mark_nice = context.addAction(Strings.MARK_NICE, lambda: self.reclassify_selected(True))
+            mark_nice.setEnabled(editable)
+        if any(value is not False for value in classes):
+            mark_not_nice = context.addAction(Strings.MARK_NOT_NICE, lambda: self.reclassify_selected(False))
+            mark_not_nice.setEnabled(editable)
         context.addSeparator()
         properties = context.addAction(Strings.CONTOUR_PROPERTIES, self.show_contour_properties)
         properties.setEnabled(selected)
@@ -412,15 +458,9 @@ class MainWindow(QMainWindow):
         data = self.__image_data[self.__current_index]
         ContourPropertiesDialog(data, self.__group_selected_indices, self).exec()
 
-    def reclassify_selected(self, nice):
-        if self._prediction_running or self.__current_index < 0:
-            return
-        data = self.__image_data[self.__current_index]
-        indices = [i for i in self.__group_selected_indices if 0 <= i < len(data['contours'])]
-        if indices:
-            self.__undo_stack.push(MarkContoursCommand(data, indices, nice))
-
     def _set_preview_tool(self, tool):
+        if self._prediction_thread is not None and tool == "draw":
+            return
         self.__drawing = tool == "draw"
         self.__group_select_active = tool == "select"
         self.button_pan.setChecked(tool == "pan")
@@ -430,8 +470,6 @@ class MainWindow(QMainWindow):
         self.__group_selected_indices = []
         self.__group_selection_start = None
         self.__group_selection_rect = None
-        self.__selection_press_position = None
-        self.__selection_dragged = False
         self._panning = self._pan_maybe = False
         self._pan_start_pos = self._pan_start_scroll = None
         self.label_image.setCursor(Qt.OpenHandCursor if tool == "pan" else Qt.CrossCursor)
@@ -443,6 +481,15 @@ class MainWindow(QMainWindow):
 
     def start_group_selection(self):
         self._set_preview_tool("select")
+
+    def select_all_contours(self):
+        if self.__current_index == -1:
+            return
+        self.start_group_selection()
+        data = self.__image_data[self.__current_index]
+        self.__group_selected_indices = list(range(len(data.get("contours", []))))
+        self.update_preview()
+        self.update_controls()
 
     def clear_group_selection(self):
         self.__group_selected_indices = []
@@ -463,15 +510,16 @@ class MainWindow(QMainWindow):
                 if f.lower().endswith(Config.IMAGE_EXTENSIONS)
             ])
 
-    def _begin_progress(self):
+    def _begin_progress(self, process_events=True):
         self._progress_started = monotonic()
         self.progress_bar.setValue(0)
         self.label_time_remaining.setText(Strings.ESTIMATING)
         self.progress_bar.show()
         self.label_time_remaining.show()
-        QApplication.processEvents()
+        if process_events:
+            QApplication.processEvents()
 
-    def _update_progress(self, completed, total):
+    def _update_progress(self, completed, total, process_events=True):
         self.progress_bar.setValue(int(completed / max(total, 1) * 100))
         if completed and self._progress_started is not None:
             remaining = max(0, math.ceil(
@@ -483,7 +531,8 @@ class MainWindow(QMainWindow):
             else:
                 text = Strings.TIME_REMAINING_SECONDS.format(seconds=remaining)
             self.label_time_remaining.setText(text)
-        QApplication.processEvents()
+        if process_events:
+            QApplication.processEvents()
 
     def _end_progress(self):
         self.progress_bar.hide()
@@ -492,6 +541,8 @@ class MainWindow(QMainWindow):
         self._progress_started = None
 
     def load_files(self, files):
+        if self._prediction_thread is not None:
+            return
         # Filter out files that are already loaded
         existing_paths = {data["path"] for data in self.__image_data}
         files_to_load = [f for f in files if f not in existing_paths]
@@ -518,6 +569,7 @@ class MainWindow(QMainWindow):
         current = self.panel_image_list.currentItem()
         current_path = current.data(Qt.UserRole + 1) if current is not None else None
         row = min(max(self.__current_index, 0), len(self.__image_data) - 1)
+        # Rebuilding status rows must not clear and decode the preview again.
         with QSignalBlocker(self.panel_image_list):
             self.panel_image_list.clear()
             if self.__image_data:
@@ -525,6 +577,11 @@ class MainWindow(QMainWindow):
                     item = QListWidgetItem(os.path.basename(data["path"]))
                     item.setData(Qt.UserRole + 1, data["path"])
                     item.setToolTip(data["path"])
+                    if "measurements" in data and data.get("predicted"):
+                        records = data["measurements"]
+                        nice_count = sum(record.get("nice") is True for record in records)
+                        unknown = sum(record.get("nice") is None for record in records)
+                        item.setToolTip(Strings.MEASUREMENT_FILE_TOOLTIP.format(path=data['path'], total=len(records), nice=nice_count, unknown=unknown, pipeline=data.get('pipeline', '')))
 
                     item.setData(Qt.UserRole + 2, data.get("processing", False))
                     item.setData(Qt.UserRole, data.get("predicted", False) and not data.get("processing", False))
@@ -536,6 +593,7 @@ class MainWindow(QMainWindow):
                     row = index
                     break
             self.panel_image_list.setCurrentRow(row)
+
         selected = self.__image_data[row] if row >= 0 else None
         if row != self.__current_index or selected is not self._preview_data:
             self.on_image_selected(row)
@@ -560,7 +618,20 @@ class MainWindow(QMainWindow):
         self._show_contours = self.menu_toggle_contours.isChecked()
         self.update_preview()
 
+    def _manual_view_interaction(self, *args):
+        if self.label_image.data is not None:
+            # A pan also leaves automatic fit mode, preserving its current scale.
+            self.__zoom_scale = self.__effective_scale
+
     def _release_preview(self):
+        if self._preview_data is not None and self.label_image.data is not None and self.__zoom_scale is not None:
+            viewport = self.panel_image.viewport()
+            center = self.label_image.image_point(QPointF(
+                self.panel_image.horizontalScrollBar().value() + viewport.width() / 2,
+                self.panel_image.verticalScrollBar().value() + viewport.height() / 2))
+            # Runtime view state contains no pixels and is not written to sidecars.
+            self._preview_data["_view_state"] = (self.__zoom_scale, center.x(), center.y())
+        # Drop Qt's borrowed buffer and pyramid before releasing the NumPy array.
         self.label_image.clear_image(Strings.IMAGE_PREVIEW)
         if self._preview_data is not None:
             self._preview_data["image"] = None
@@ -574,12 +645,15 @@ class MainWindow(QMainWindow):
         if self.__current_index < 0 or self.__current_index >= len(self.__image_data):
             self._release_preview()
             self.label_image.resize(self.panel_image.viewport().size())
+            self.label_measurements.clear()
             return
 
         data = self.__image_data[self.__current_index]
         if data is not self._preview_data:
             self._release_preview()
             self._preview_data = data
+            state = data.get("_view_state")
+            self.__zoom_scale = state[0] if state is not None else None
         if not data.get("load_error"):
             try:
                 ImageLogic.ensure_pixels(data)
@@ -588,7 +662,14 @@ class MainWindow(QMainWindow):
         if data.get("load_error"):
             self.label_image.clear_image(data["load_error"])
             self.label_image.resize(self.panel_image.viewport().size())
+            self.label_measurements.clear()
             return
+        records = data.get("measurements", [])
+        if data.get("predicted"):
+            nice_count = sum(record.get("nice") is True for record in records)
+            self.label_measurements.setText(Strings.MEASUREMENT_SUMMARY.format(total=len(data['contours']), nice=nice_count))
+        else:
+            self.label_measurements.clear()
         preview = self.label_image
         changed = preview.set_data(data)
         preview.selected = set(self.__group_selected_indices)
@@ -603,7 +684,9 @@ class MainWindow(QMainWindow):
         self.__effective_scale = base_scale if self.__zoom_scale is None else self.__zoom_scale
         preview.set_view(self.__effective_scale, viewport.size())
         if changed:
-            center = preview.widget_point(QPointF(w / 2, h / 2))
+            state = data.get("_view_state")
+            image_center = QPointF(state[1], state[2]) if state is not None else QPointF(w / 2, h / 2)
+            center = preview.widget_point(image_center)
             self.panel_image.horizontalScrollBar().setValue(round(center.x() - viewport.width() / 2))
             self.panel_image.verticalScrollBar().setValue(round(center.y() - viewport.height() / 2))
         self.label_zoom.setText(f"{self.__effective_scale * 100:.0f}%")
@@ -640,7 +723,6 @@ class MainWindow(QMainWindow):
                 v_bar.setValue(round(position.y() - event.size().height() / 2))
         return super().eventFilter(watched, event)
 
-
     def zoom_step_in(self):
         self.zoom(self.__effective_scale * 1.2)
 
@@ -648,8 +730,9 @@ class MainWindow(QMainWindow):
         self.zoom(self.__effective_scale / 1.2)
 
     def prediction_enable_controls(self, enable):
-        self._prediction_running = not enable
         self.panel_image_list.setEnabled(enable)
+        self.menu_import_files.setEnabled(enable)
+        self.menu_import_folder.setEnabled(enable)
         self.button_predict.setVisible(enable)
         self.button_cancel.setVisible(not enable)
         self.menu_start_prediction.setEnabled(enable)
@@ -657,54 +740,68 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(not enable)
 
     def start_prediction(self):
-        indices_to_predict = [i for i, data in enumerate(self.__image_data) if not data.get("predicted", False)]
-        if not indices_to_predict:
+        if self._prediction_thread is not None:
             return
-
-        self.prediction_enable_controls(False)
+        self._prediction_pending = [data for data in self.__image_data if not data.get("predicted", False)]
+        if not self._prediction_pending:
+            return
         self.__cancel_prediction = False
+        self._prediction_total = len(self._prediction_pending)
+        self._prediction_completed = 0
+        self._start_next_prediction()
+        self._begin_progress(process_events=False)
 
-        total = len(indices_to_predict)
-        self._begin_progress()
-        try:
-            for idx_num, idx in enumerate(indices_to_predict):
-                if self.__cancel_prediction:
-                    break
+    def _start_next_prediction(self):
+        self._prediction_data = self._prediction_pending.pop(0)
+        self._prediction_data["processing"] = True
+        worker = PredictionWorker(self._prediction_data["path"], self)
+        self._prediction_thread = worker
+        worker.finished.connect(self._prediction_finished)
+        self.prediction_enable_controls(False)
+        self.update_controls()
+        self.update_image_list()
+        worker.start()
 
-                self.__image_data[idx]["processing"] = True
-                self.update_image_list()
-
-                data = self.__image_data[idx]
-                try:
-                    contours, scores = PredictionLogic.predict_contours(ImageLogic.ensure_pixels(data), data["path"])
-                finally:
-                    if data is not self._preview_data:
-                        data["image"] = None
-                self.__image_data[idx]["contours"] = contours
-                self.__image_data[idx]["scores"] = scores
-
-                self.__image_data[idx]["predicted"] = True
-                self.__image_data[idx]["processing"] = False
-                self.update_image_list()
-
-                # --- Update preview after each prediction to show confidences ---
-                self.update_preview()
-                # --- End update preview ---
-
-                # Progress bar increases as files are processed
-                self._update_progress(idx_num + 1, total)
-
-        finally:
-            for idx in indices_to_predict:
-                self.__image_data[idx]["processing"] = False
-            self._end_progress()
-            self.prediction_enable_controls(True)
-            self.update_image_list()
-            self.update_preview()
-            self.update_controls()
+    def _prediction_finished(self):
+        worker = self._prediction_thread
+        data = self._prediction_data
+        data["processing"] = False
+        if worker.result is not None:
+            self.__undo_stack.clear()
+            self.__group_selected_indices = []
+            data.pop("original_annotations", None)
+            data.update(worker.result)
+            data["predicted"] = True
+            self._prediction_completed += 1
+        error = worker.error
+        worker.deleteLater()
+        # Keep the busy guard until result handling and progress updates finish.
+        self.update_image_list()
+        self.update_preview()
+        self._update_progress(self._prediction_completed, self._prediction_total, process_events=False)
+        self._prediction_thread = None
+        if error is None and not self.__cancel_prediction and self._prediction_pending:
+            self._start_next_prediction()
+            return
+        self._prediction_pending = []
+        self._end_progress()
+        self.prediction_enable_controls(True)
+        self.update_controls()
+        if error is not None:
+            QMessageBox.critical(self, Strings.PREDICTION_FAILED, error)
+        if self._close_after_prediction:
+            self.close()
 
     def cancel_prediction_process(self):
         self.__cancel_prediction = True
+
+    def closeEvent(self, event):
+        if self._prediction_thread is not None:
+            self._close_after_prediction = True
+            self.cancel_prediction_process()
+            event.ignore()
+            return
+        super().closeEvent(event)
 
     def start_drawing(self):
         self._set_preview_tool("pan" if self.__drawing else "draw")
@@ -746,12 +843,15 @@ class MainWindow(QMainWindow):
 
         # If in contour drawing mode, record the point and update the preview.
         elif self.__drawing:
+            if self._prediction_thread is not None:
+                return
             h, w = self.__image_data[self.__current_index]["image"].shape[:2]
             if not (0 <= pt.x() < w and 0 <= pt.y() < h):
                 return
             self.__current_contour.append((pt.x(), pt.y()))
             self.update_preview()
             return
+
 
     def preview_mouse_move(self, event: QMouseEvent):
         if self.label_image.data is None:
@@ -766,6 +866,7 @@ class MainWindow(QMainWindow):
                 self._pan_maybe = False
                 self.label_image.setCursor(Qt.ClosedHandCursor)
         if self._panning and self._pan_start_pos is not None:
+            self._manual_view_interaction()
             current_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
             dx = current_pos.x() - self._pan_start_pos.x()
             dy = current_pos.y() - self._pan_start_pos.y()
@@ -787,7 +888,7 @@ class MainWindow(QMainWindow):
             self.update_preview()
             return
 
-        if self.__drawing and self.__current_contour:
+        if self.__drawing and self.__current_contour and self._prediction_thread is None:
             pt = self.get_image_coordinates(event)
             h, w = self.__image_data[self.__current_index]["image"].shape[:2]
             pt = QPoint(min(w - 1, max(0, pt.x())), min(h - 1, max(0, pt.y())))
@@ -856,14 +957,21 @@ class MainWindow(QMainWindow):
             return
 
         # If in drawing mode.
-        if self.__drawing and self.__current_contour:
+        if self.__drawing and self.__current_contour and self._prediction_thread is None:
             # Create an undo command for this operation
-            command = AddContourCommand(self.__image_data[self.__current_index], self.__current_contour)
+            try:
+                command = AddContourCommand(self.__image_data[self.__current_index], self.__current_contour)
+            except Exception as error:
+                self.__current_contour = []
+                self.update_preview()
+                QMessageBox.critical(self, Strings.CONTOUR_CLASSIFICATION_FAILED, str(error))
+                return
             self.__undo_stack.push(command)
 
             # Update UI after the command is executed
             self.__current_contour = []
             self.update_preview()
+            self.update_controls()
 
     def get_image_coordinates(self, event: QMouseEvent):
         if self.label_image.data is None:
@@ -871,6 +979,8 @@ class MainWindow(QMainWindow):
         return self.label_image.image_point(event.position()).toPoint()
 
     def remove_selected_contour(self):
+        if self._prediction_thread is not None:
+            return
         if self.__current_index == -1 or not self.__group_selected_indices:
             return
 
@@ -896,21 +1006,33 @@ class MainWindow(QMainWindow):
         ExportLogic.export_data(dialog.get_file_name(), dialog.get_selections(), self.__image_data)
 
     def update_controls(self):
+        busy = self._prediction_thread is not None
         has_images = len(self.__image_data) > 0 and self.__current_index != -1
+        can_edit = has_images and not busy
         self.menu_zoom_in.setEnabled(has_images)
         self.menu_zoom_out.setEnabled(has_images)
         self.button_zoom_in.setEnabled(has_images)
         self.button_zoom_out.setEnabled(has_images)
 
-        self.button_predict.setEnabled(any(not d.get("predicted", False) for d in self.__image_data))
-        self.menu_start_prediction.setEnabled(any(not d.get("predicted", False) for d in self.__image_data))
-        self.menu_export.setEnabled(has_images and all(d.get("predicted", False) for d in self.__image_data))
+        self.button_predict.setEnabled(not busy and any(not d.get("predicted", False) for d in self.__image_data))
+        self.menu_start_prediction.setEnabled(not busy and any(not d.get("predicted", False) for d in self.__image_data))
+        self.menu_export.setEnabled(can_edit and all(d.get("predicted", False) for d in self.__image_data))
 
-        self.button_contour_add.setEnabled(has_images)
+        self.button_contour_add.setEnabled(can_edit)
         self.button_contour_remove.setVisible(bool(self.__group_selected_indices))
-        self.button_contour_remove.setEnabled(has_images and len(self.__group_selected_indices) > 0)
-        self.menu_add_contour.setEnabled(has_images)
-        self.menu_remove_contour.setEnabled(has_images and len(self.__group_selected_indices) > 0)
+        self.button_contour_remove.setEnabled(can_edit and len(self.__group_selected_indices) > 0)
+        self.button_restore_classification.setVisible(has_images)
+        has_edits = False
+        if has_images:
+            data = self.__image_data[self.__current_index]
+            original = data.get("original_annotations")
+            has_edits = (ImageLogic.annotation_snapshot(data) != original if original is not None
+                         else any(record.get("status") == "manual" or "nice_override" in record
+                                  for record in data.get("measurements", [])))
+        self.button_restore_classification.setEnabled(can_edit and has_edits)
+        self.menu_add_contour.setEnabled(can_edit)
+        self.menu_select_all_contours.setEnabled(has_images)
+        self.menu_remove_contour.setEnabled(can_edit and len(self.__group_selected_indices) > 0)
         self.button_pan.setEnabled(has_images)
 
         # Disable group selection button if no image is selected.
@@ -920,6 +1042,8 @@ class MainWindow(QMainWindow):
         self.update_undo_actions()
 
     def keyPressEvent(self, event):
+        if self._prediction_thread is not None:
+            return
         if event.key() == Qt.Key_Delete:
             if self.focusWidget() == self.label_image or not self.panel_image_list.hasFocus():
                 if self.__group_selected_indices:
@@ -947,6 +1071,8 @@ class MainWindow(QMainWindow):
             distance = pixels.y() or pixels.x()
             if not distance:
                 distance = (angle.y() or angle.x()) / 120 * QApplication.wheelScrollLines() * bar.singleStep()
+            if distance:
+                self._manual_view_interaction()
             bar.setValue(bar.value() - round(distance))
         elif angle.y() or pixels.y():
             # Plain wheel and Ctrl+wheel both zoom about the pointer.
@@ -959,5 +1085,7 @@ class MainWindow(QMainWindow):
             # Preserve native horizontal trackpad/tilt-wheel panning.
             bar = self.panel_image.horizontalScrollBar()
             distance = pixels.x() or angle.x() / 120 * QApplication.wheelScrollLines() * bar.singleStep()
+            if distance:
+                self._manual_view_interaction()
             bar.setValue(bar.value() - round(distance))
         event.accept()
