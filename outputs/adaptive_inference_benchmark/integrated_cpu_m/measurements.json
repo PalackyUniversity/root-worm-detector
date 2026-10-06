@@ -1,0 +1,184 @@
+[
+  {
+    "model": "m",
+    "device": "cpu",
+    "threads": 4,
+    "repeat": 0,
+    "seconds": 141.75532387501153,
+    "seconds_per_image": 47.25177462500384,
+    "statuses": [
+      {
+        "device": "cpu",
+        "workers": 2,
+        "fallback": false
+      },
+      {
+        "device": "cpu",
+        "workers": 1,
+        "fallback": false
+      }
+    ],
+    "images": [
+      {
+        "file": "20260327_10311616_02.tif",
+        "count": 1,
+        "parity": {
+          "exact": true,
+          "same_count": true,
+          "same_centres": true,
+          "same_nice": true,
+          "same_nice_probability": true,
+          "same_area_mm2": true,
+          "same_mask": true,
+          "same_detector_score": true
+        },
+        "differences": {
+          "max_position_error_px": 0.0,
+          "max_delta_detector_score": 0.0,
+          "max_delta_area_mm2": 0.0,
+          "max_relative_area_change": 0.0,
+          "max_delta_nice_probability": 0.0,
+          "changed_masks": 0,
+          "changed_nice_decisions": 0
+        }
+      },
+      {
+        "file": "20260624_14453408_36.tif",
+        "count": 18,
+        "parity": {
+          "exact": true,
+          "same_count": true,
+          "same_centres": true,
+          "same_nice": true,
+          "same_nice_probability": true,
+          "same_area_mm2": true,
+          "same_mask": true,
+          "same_detector_score": true
+        },
+        "differences": {
+          "max_position_error_px": 0.0,
+          "max_delta_detector_score": 0.0,
+          "max_delta_area_mm2": 0.0,
+          "max_relative_area_change": 0.0,
+          "max_delta_nice_probability": 0.0,
+          "changed_masks": 0,
+          "changed_nice_decisions": 0
+        }
+      },
+      {
+        "file": "20260330_07211190_07.tif",
+        "count": 48,
+        "parity": {
+          "exact": true,
+          "same_count": true,
+          "same_centres": true,
+          "same_nice": true,
+          "same_nice_probability": true,
+          "same_area_mm2": true,
+          "same_mask": true,
+          "same_detector_score": true
+        },
+        "differences": {
+          "max_position_error_px": 0.0,
+          "max_delta_detector_score": 0.0,
+          "max_delta_area_mm2": 0.0,
+          "max_relative_area_change": 0.0,
+          "max_delta_nice_probability": 0.0,
+          "changed_masks": 0,
+          "changed_nice_decisions": 0
+        }
+      }
+    ]
+  },
+  {
+    "model": "m",
+    "device": "cpu",
+    "threads": 4,
+    "repeat": 1,
+    "seconds": 131.0551781260001,
+    "seconds_per_image": 43.68505937533337,
+    "statuses": [
+      {
+        "device": "cpu",
+        "workers": 2,
+        "fallback": false
+      },
+      {
+        "device": "cpu",
+        "workers": 1,
+        "fallback": false
+      }
+    ],
+    "images": [
+      {
+        "file": "20260327_10311616_02.tif",
+        "count": 1,
+        "parity": {
+          "exact": true,
+          "same_count": true,
+          "same_centres": true,
+          "same_nice": true,
+          "same_nice_probability": true,
+          "same_area_mm2": true,
+          "same_mask": true,
+          "same_detector_score": true
+        },
+        "differences": {
+          "max_position_error_px": 0.0,
+          "max_delta_detector_score": 0.0,
+          "max_delta_area_mm2": 0.0,
+          "max_relative_area_change": 0.0,
+          "max_delta_nice_probability": 0.0,
+          "changed_masks": 0,
+          "changed_nice_decisions": 0
+        }
+      },
+      {
+        "file": "20260624_14453408_36.tif",
+        "count": 18,
+        "parity": {
+          "exact": true,
+          "same_count": true,
+          "same_centres": true,
+          "same_nice": true,
+          "same_nice_probability": true,
+          "same_area_mm2": true,
+          "same_mask": true,
+          "same_detector_score": true
+        },
+        "differences": {
+          "max_position_error_px": 0.0,
+          "max_delta_detector_score": 0.0,
+          "max_delta_area_mm2": 0.0,
+          "max_relative_area_change": 0.0,
+          "max_delta_nice_probability": 0.0,
+          "changed_masks": 0,
+          "changed_nice_decisions": 0
+        }
+      },
+      {
+        "file": "20260330_07211190_07.tif",
+        "count": 48,
+        "parity": {
+          "exact": true,
+          "same_count": true,
+          "same_centres": true,
+          "same_nice": true,
+          "same_nice_probability": true,
+          "same_area_mm2": true,
+          "same_mask": true,
+          "same_detector_score": true
+        },
+        "differences": {
+          "max_position_error_px": 0.0,
+          "max_delta_detector_score": 0.0,
+          "max_delta_area_mm2": 0.0,
+          "max_relative_area_change": 0.0,
+          "max_delta_nice_probability": 0.0,
+          "changed_masks": 0,
+          "changed_nice_decisions": 0
+        }
+      }
+    ]
+  }
+]

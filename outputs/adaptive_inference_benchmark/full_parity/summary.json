@@ -1,0 +1,33 @@
+{
+  "pipeline": "v8-s-mr4-seeded-unet-gb9-nice030-v2",
+  "nice_threshold": 0.3,
+  "images": 150,
+  "detections": 2706,
+  "classified": 2705,
+  "nice": 1439,
+  "reference_nice_at_030": 1439,
+  "original_nice": 1440,
+  "exact_detection_count_plates": 150,
+  "exact_classified_count_plates": 150,
+  "exact_nice_count_plates": 150,
+  "matched_objects": 2705,
+  "differences": 2,
+  "elapsed_seconds": 12.418884238999453,
+  "source_csv_tolerance": 1e-12,
+  "sidecars_roundtripped_without_loss": true,
+  "runtime": {
+    "torch": "2.11.0+cu128",
+    "torchvision": "0.26.0+cu128",
+    "ultralytics": "8.4.115",
+    "sahi": "0.12.5",
+    "opencv-python": "5.0.0.93",
+    "numpy": "2.5.3",
+    "scikit-learn": "1.9.0"
+  },
+  "max_position_error_px": 0.0,
+  "max_area_error_mm2": 9.71445146547012e-17,
+  "max_niceness_probability_error": 1.1102230246251565e-16,
+  "exact_niceness_decisions": 2705,
+  "matches_reference": false,
+  "matches_reference_outputs": true
+}

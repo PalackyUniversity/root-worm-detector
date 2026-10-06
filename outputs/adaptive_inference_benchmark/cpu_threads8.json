@@ -1,0 +1,50 @@
+[
+  {
+    "model": "s",
+    "threads": 8,
+    "seconds": 26.42532510899764,
+    "parity": {
+      "exact": false,
+      "same_count": true,
+      "same_centres": true,
+      "same_nice": true,
+      "same_nice_probability": true,
+      "same_area_mm2": true,
+      "same_mask": true,
+      "same_detector_score": false
+    },
+    "differences": {
+      "max_position_error_px": 0.0,
+      "max_delta_detector_score": 1.7881393432617188e-07,
+      "max_delta_area_mm2": 0.0,
+      "max_relative_area_change": 0.0,
+      "max_delta_nice_probability": 0.0,
+      "changed_masks": 0,
+      "changed_nice_decisions": 0
+    }
+  },
+  {
+    "model": "m",
+    "threads": 8,
+    "seconds": 86.38909520200104,
+    "parity": {
+      "exact": false,
+      "same_count": true,
+      "same_centres": true,
+      "same_nice": true,
+      "same_nice_probability": true,
+      "same_area_mm2": true,
+      "same_mask": true,
+      "same_detector_score": false
+    },
+    "differences": {
+      "max_position_error_px": 0.0,
+      "max_delta_detector_score": 1.1920928955078125e-07,
+      "max_delta_area_mm2": 0.0,
+      "max_relative_area_change": 0.0,
+      "max_delta_nice_probability": 0.0,
+      "changed_masks": 0,
+      "changed_nice_decisions": 0
+    }
+  }
+]

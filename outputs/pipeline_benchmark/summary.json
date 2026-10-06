@@ -1,0 +1,198 @@
+{
+  "initialization_seconds": 1.1523961790080648,
+  "first_plate": {
+    "read_dpi": 0.002292339995619841,
+    "detector_perform_batch_inference": 2.1120717800658895,
+    "detector_convert_original_predictions": 0.0051662259647855535,
+    "detector_perform_inference": 0.049850719995447434,
+    "sahi_slice": 0.07720907100883778,
+    "sahi_prediction": 2.2183285110077122,
+    "sahi_postprocess": 0.0,
+    "detection_total": 2.329110495003988,
+    "refiner_image_read": 0.049998522008536384,
+    "predict_total": 2.3883033400052227,
+    "sidecar_write": 0.0002518499968573451,
+    "total": 2.38855519000208
+  },
+  "images": 6,
+  "repeats": 2,
+  "gpu": "NVIDIA GeForce RTX 5070 Ti",
+  "runtime": {
+    "torch": "2.11.0+cu128",
+    "ultralytics": "8.4.115",
+    "sahi": "0.12.5",
+    "numpy": "2.5.3",
+    "opencv-python": "5.0.0.93"
+  },
+  "variants": {
+    "baseline": {
+      "mean_seconds": {
+        "centre_component": 0.0010277496645964372,
+        "classifier": 0.008725372247378496,
+        "describe": 0.010025796501092069,
+        "detection_total": 1.7663089345842309,
+        "detector_convert_original_predictions": 0.013389233879327852,
+        "detector_perform_batch_inference": 1.6105377807228554,
+        "detector_perform_inference": 0.04865446108427326,
+        "encode_mask": 0.00027596451885377366,
+        "predict_total": 1.8627396351669934,
+        "prepare_crop": 0.0025741729987203144,
+        "read_dpi": 0.002330268916315011,
+        "refiner_image_read": 0.041490413749367384,
+        "sahi_postprocess": 0.007251620292663574,
+        "sahi_prediction": 1.6956454399575402,
+        "sahi_slice": 0.034274676249575954,
+        "shape_forward": 0.009555638584667273,
+        "sidecar_write": 0.012087887752083285,
+        "total": 1.8748275229190767
+      },
+      "parity_passes": {
+        "exact": 10,
+        "same_count": 12,
+        "same_centres": 12,
+        "same_nice": 12,
+        "same_nice_probability": 12,
+        "same_area_mm2": 12,
+        "same_mask": 12,
+        "same_detector_score": 12
+      },
+      "runs": 12
+    },
+    "decode_once": {
+      "mean_seconds": {
+        "centre_component": 0.0010459497473978747,
+        "classifier": 0.011762310247528754,
+        "describe": 0.010010771846282296,
+        "detection_total": 1.665547626413172,
+        "detector_convert_original_predictions": 0.013220704511089329,
+        "detector_perform_batch_inference": 1.5922380141904189,
+        "detector_perform_inference": 0.049018320749989165,
+        "encode_mask": 0.0002807863311318215,
+        "predict_total": 1.7329519248317713,
+        "prepare_crop": 0.002540224845385334,
+        "read_dpi": 0.005373637581215007,
+        "refiner_image_read": 0.010871212166724339,
+        "sahi_postprocess": 0.006822407245635986,
+        "sahi_prediction": 1.623353021421887,
+        "sahi_slice": 0.0074001486658138065,
+        "shape_forward": 0.009327848666240849,
+        "shared_decode": 0.027888769000128377,
+        "sidecar_write": 0.01183661600104339,
+        "total": 1.7447885408328148
+      },
+      "parity_passes": {
+        "exact": 10,
+        "same_count": 12,
+        "same_centres": 12,
+        "same_nice": 12,
+        "same_nice_probability": 12,
+        "same_area_mm2": 12,
+        "same_mask": 12,
+        "same_detector_score": 12
+      },
+      "runs": 12
+    },
+    "batch4": {
+      "mean_seconds": {
+        "centre_component": 0.0010235490844934247,
+        "classifier": 0.005224812089484961,
+        "describe": 0.009726501345236708,
+        "detection_total": 0.7705268240861187,
+        "detector_convert_original_predictions": 0.010854955569811864,
+        "detector_perform_batch_inference": 0.7043959514291297,
+        "detector_perform_inference": 0.04970360066727153,
+        "encode_mask": 0.00027102050322961685,
+        "predict_total": 0.8296530673336141,
+        "prepare_crop": 0.0025900974142132327,
+        "read_dpi": 0.0023054465806732574,
+        "refiner_image_read": 0.011583369168268595,
+        "sahi_postprocess": 0.0068761905034383135,
+        "sahi_prediction": 0.7287807658309854,
+        "sahi_slice": 0.007585370834325052,
+        "shape_forward": 0.009065138167594947,
+        "shared_decode": 0.027156256252055755,
+        "sidecar_write": 0.015537511332998596,
+        "total": 0.8451905786666126
+      },
+      "parity_passes": {
+        "exact": 2,
+        "same_count": 12,
+        "same_centres": 10,
+        "same_nice": 12,
+        "same_nice_probability": 10,
+        "same_area_mm2": 10,
+        "same_mask": 10,
+        "same_detector_score": 2
+      },
+      "runs": 12
+    },
+    "batch8": {
+      "mean_seconds": {
+        "centre_component": 0.0010187566610208403,
+        "classifier": 0.006528458918182878,
+        "describe": 0.009689140088691298,
+        "detection_total": 0.729543271165312,
+        "detector_convert_original_predictions": 0.010162075922077443,
+        "detector_perform_batch_inference": 0.6644245734156963,
+        "detector_perform_inference": 0.0492642521688443,
+        "encode_mask": 0.0002739776646194514,
+        "predict_total": 0.7877916458370843,
+        "prepare_crop": 0.0025365557448822074,
+        "read_dpi": 0.002238193749993419,
+        "refiner_image_read": 0.011814468003043052,
+        "sahi_postprocess": 0.006708542505900065,
+        "sahi_prediction": 0.6883663383268868,
+        "sahi_slice": 0.0074776783330889884,
+        "shape_forward": 0.008339979084363828,
+        "shared_decode": 0.026805435917291714,
+        "sidecar_write": 0.011795089501295783,
+        "total": 0.7995867353383801
+      },
+      "parity_passes": {
+        "exact": 2,
+        "same_count": 12,
+        "same_centres": 6,
+        "same_nice": 12,
+        "same_nice_probability": 6,
+        "same_area_mm2": 6,
+        "same_mask": 6,
+        "same_detector_score": 2
+      },
+      "runs": 12
+    },
+    "batch16": {
+      "mean_seconds": {
+        "centre_component": 0.0010164644930531115,
+        "classifier": 0.004310010333332078,
+        "describe": 0.009612978004345981,
+        "detection_total": 0.7538036681677719,
+        "detector_convert_original_predictions": 0.009501418747580223,
+        "detector_perform_batch_inference": 0.6903307037500781,
+        "detector_perform_inference": 0.04919226441901022,
+        "encode_mask": 0.00027095392700478743,
+        "predict_total": 0.8104789039146757,
+        "prepare_crop": 0.00256254016130697,
+        "read_dpi": 0.0023407324151776265,
+        "refiner_image_read": 0.011552126585835746,
+        "sahi_postprocess": 0.006867031256357829,
+        "sahi_prediction": 0.7124742451621083,
+        "sahi_slice": 0.007249057080722802,
+        "shape_forward": 0.008730273168718364,
+        "shared_decode": 0.027019998834778864,
+        "sidecar_write": 0.01672060333536744,
+        "total": 0.8271995072500431
+      },
+      "parity_passes": {
+        "exact": 2,
+        "same_count": 12,
+        "same_centres": 8,
+        "same_nice": 12,
+        "same_nice_probability": 8,
+        "same_area_mm2": 8,
+        "same_mask": 8,
+        "same_detector_score": 2
+      },
+      "runs": 12
+    }
+  }
+}

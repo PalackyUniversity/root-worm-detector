@@ -2,6 +2,31 @@
 
 Root Worm Detector is a Python-based application for detecting and visualizing root worms in images using deep learning. It provides an interactive GUI for batch processing, annotation, and inspection of predictions, making it suitable for research and practical applications in plant pathology and soil biology.
 
+The GUI defaults to **YOLO M (v8-m-mr4 `best.pt`, confidence 0.35)**.
+The model selector also offers the faster **YOLO S (v8-s-mr4, confidence 0.35)**.
+Both use the seeded U-Net outline refiner and the five-model GB-9 niceness ensemble.
+The frozen 5WPI reference belongs to S; M is a different trained detector,
+so selecting it can change predictions.
+
+SHA-256 checks reject missing or substituted model files. Inference runs in independent
+worker processes, with reusable models and a shared image decode where EXIF
+orientation allows it. CUDA is preferred, then MPS, then CPU. The scheduler
+limits concurrency by available memory and CPU cores, measures GPU throughput,
+and backs off when additional workers stop helping. Accelerator allocation or
+backend failures retry with fewer workers and then CPU, keeping the same model
+and prediction settings. Corrupt inputs and invalid model files report errors.
+CPU workers use bounded thread groups to avoid oversubscribing cores.
+
+The status bar shows the device and active workers. Cancel stops dispatching
+new images and saves in-flight results; closing the app drains those jobs too.
+Model selection applies to future predictions and does not overwrite existing
+annotations. Use **Re-predict current image…** to explicitly replace them; the
+previous sidecar is backed up as `.before-repredict-<id>.bak`. Both M and S
+sidecars remain loadable, and exports identify the detector and execution device.
+
+Performance measurements and hardware limitations are documented in
+[the adaptive-inference benchmark](outputs/adaptive_inference_benchmark/REPORT.md).
+
 ---
 
 ## Features

@@ -1,0 +1,146 @@
+[
+  {
+    "model": "s",
+    "threads": 1,
+    "seconds": 54.17551370400179,
+    "parity": {
+      "exact": false,
+      "same_count": true,
+      "same_centres": true,
+      "same_nice": true,
+      "same_nice_probability": true,
+      "same_area_mm2": true,
+      "same_mask": true,
+      "same_detector_score": false
+    },
+    "differences": {
+      "max_position_error_px": 0.0,
+      "max_delta_detector_score": 3.5762786865234375e-07,
+      "max_delta_area_mm2": 0.0,
+      "max_relative_area_change": 0.0,
+      "max_delta_nice_probability": 0.0,
+      "changed_masks": 0,
+      "changed_nice_decisions": 0
+    }
+  },
+  {
+    "model": "s",
+    "threads": 2,
+    "seconds": 30.014148469999782,
+    "parity": {
+      "exact": false,
+      "same_count": true,
+      "same_centres": true,
+      "same_nice": true,
+      "same_nice_probability": true,
+      "same_area_mm2": true,
+      "same_mask": true,
+      "same_detector_score": true
+    },
+    "differences": {
+      "max_position_error_px": 0.0,
+      "max_delta_detector_score": 0.0,
+      "max_delta_area_mm2": 0.0,
+      "max_relative_area_change": 0.0,
+      "max_delta_nice_probability": 0.0,
+      "changed_masks": 0,
+      "changed_nice_decisions": 0
+    }
+  },
+  {
+    "model": "s",
+    "threads": 4,
+    "seconds": 19.461600554990582,
+    "parity": {
+      "exact": false,
+      "same_count": true,
+      "same_centres": true,
+      "same_nice": true,
+      "same_nice_probability": true,
+      "same_area_mm2": true,
+      "same_mask": true,
+      "same_detector_score": true
+    },
+    "differences": {
+      "max_position_error_px": 0.0,
+      "max_delta_detector_score": 0.0,
+      "max_delta_area_mm2": 0.0,
+      "max_relative_area_change": 0.0,
+      "max_delta_nice_probability": 0.0,
+      "changed_masks": 0,
+      "changed_nice_decisions": 0
+    }
+  },
+  {
+    "model": "m",
+    "threads": 1,
+    "seconds": 159.81828459800454,
+    "parity": {
+      "exact": false,
+      "same_count": true,
+      "same_centres": true,
+      "same_nice": true,
+      "same_nice_probability": true,
+      "same_area_mm2": true,
+      "same_mask": true,
+      "same_detector_score": false
+    },
+    "differences": {
+      "max_position_error_px": 0.0,
+      "max_delta_detector_score": 1.1920928955078125e-07,
+      "max_delta_area_mm2": 0.0,
+      "max_relative_area_change": 0.0,
+      "max_delta_nice_probability": 0.0,
+      "changed_masks": 0,
+      "changed_nice_decisions": 0
+    }
+  },
+  {
+    "model": "m",
+    "threads": 2,
+    "seconds": 91.39948535800795,
+    "parity": {
+      "exact": true,
+      "same_count": true,
+      "same_centres": true,
+      "same_nice": true,
+      "same_nice_probability": true,
+      "same_area_mm2": true,
+      "same_mask": true,
+      "same_detector_score": true
+    },
+    "differences": {
+      "max_position_error_px": 0.0,
+      "max_delta_detector_score": 0.0,
+      "max_delta_area_mm2": 0.0,
+      "max_relative_area_change": 0.0,
+      "max_delta_nice_probability": 0.0,
+      "changed_masks": 0,
+      "changed_nice_decisions": 0
+    }
+  },
+  {
+    "model": "m",
+    "threads": 4,
+    "seconds": 56.25163291799254,
+    "parity": {
+      "exact": true,
+      "same_count": true,
+      "same_centres": true,
+      "same_nice": true,
+      "same_nice_probability": true,
+      "same_area_mm2": true,
+      "same_mask": true,
+      "same_detector_score": true
+    },
+    "differences": {
+      "max_position_error_px": 0.0,
+      "max_delta_detector_score": 0.0,
+      "max_delta_area_mm2": 0.0,
+      "max_relative_area_change": 0.0,
+      "max_delta_nice_probability": 0.0,
+      "changed_masks": 0,
+      "changed_nice_decisions": 0
+    }
+  }
+]

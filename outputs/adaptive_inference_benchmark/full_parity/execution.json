@@ -1,0 +1,261 @@
+{
+  "seconds": 116.5587196330016,
+  "images": 150,
+  "statuses": [
+    {
+      "device": "cuda:0",
+      "workers": 1,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 2,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 2,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 4,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 4,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 3,
+      "fallback": false
+    },
+    {
+      "device": "cuda:0",
+      "workers": 2,
+      "fallback": false
+    }
+  ]
+}
