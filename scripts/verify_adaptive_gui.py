@@ -1,4 +1,4 @@
-"""Real M inference, sidecar reload and selector preservation on a disposable copy."""
+"""Real M inference, sidecar reload and model-change invalidation on a disposable copy."""
 import json
 import os
 from pathlib import Path
@@ -24,7 +24,7 @@ def main():
         window = MainWindow()
         try:
             window.load_files([str(path)])
-            assert window.model_selector.currentData() == 'm'
+            assert window.model_actions['m'].isChecked()
             window.start_prediction()
             deadline = time.monotonic()+180
             while window._prediction_thread is not None and time.monotonic() < deadline:
@@ -34,19 +34,24 @@ def main():
             data = window._MainWindow__image_data[0]
             assert data['predicted'] and data['model_id'] == 'm'
             sidecar = Path(str(path)+'_contours.json')
-            saved = sidecar.read_bytes()
             reloaded = ImageLogic.load_image(str(path))
             assert reloaded['predicted'] and reloaded['model_id'] == 'm'
             assert reloaded['measurements'] == data['measurements']
-            window.model_selector.setCurrentIndex(window.model_selector.findData('s'))
-            assert sidecar.read_bytes() == saved and data['model_id'] == 'm'
+            window.model_actions['s'].trigger()
+            deadline = time.monotonic()+30
+            while window._invalidation_thread is not None and time.monotonic() < deadline:
+                app.processEvents()
+                time.sleep(.01)
+            assert window._invalidation_thread is None
+            assert not data['predicted'] and not ImageLogic.load_image(str(path))['predicted']
+            assert data['model_id'] == 'm'
             from logic.export_logic import ExportLogic
             export = Path(folder)/'results.xlsx'
             ExportLogic.export_data(str(export), {'individual': True}, [data])
             exported = pd.read_excel(export, sheet_name='Images')
             assert exported.iloc[0]['Detector Model'] == 'm'
             assert exported.iloc[0]['Pipeline'] == data['pipeline']
-            report = dict(model='m', detected=len(data['scores']), reload=True, selector_preserves_results=True, export=True)
+            report = dict(model='m', detected=len(data['scores']), reload=True, model_change_invalidates=True, export=True)
             (ROOT/'outputs/adaptive_inference_benchmark/gui_smoke.json').write_text(json.dumps(report, indent=2))
             print(report)
         finally:

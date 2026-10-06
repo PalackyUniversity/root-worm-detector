@@ -60,3 +60,18 @@ class BatchPredictionWorker(QThread):
                                on_status=self.status_changed.emit)
         except Exception as error:
             self.error = str(error)
+
+
+class InvalidationWorker(QThread):
+    """Persist pending status without blocking the GUI or touching widgets."""
+    def __init__(self, records, parent=None):
+        super().__init__(parent)
+        self.records = records
+        self.errors = []
+
+    def run(self):
+        for data in self.records:
+            try:
+                ImageLogic.save_image_data(data)
+            except Exception as error:
+                self.errors.append(f"{data['path']}: {error}")

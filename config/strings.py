@@ -108,10 +108,12 @@ class Strings:
     ALREADY_IMPORTED_MESSAGE = "Some files are already imported and were skipped."
     IMAGE_LOAD_ERROR_MESSAGE = "Failed to load image: {file_path}"
 
+    MODEL_CHANGE_SAVE_FAILED = "Could not save prediction invalidation"
+    SELECT_MODEL = "Select model"
     DETECTOR_LABEL = "Detector"
     DETECTOR_M = "M — medium (default)"
     DETECTOR_S = "S — small, faster"
-    DETECTOR_TOOLTIP = "Choose the detector for new predictions. Existing annotations keep their original model."
+    DETECTOR_TOOLTIP = "Changing the detector marks all loaded images as needing prediction again."
     REPREDICT = "Re-predict current image…"
     REPREDICT_CONFIRM = "Replace this image's annotations using the selected detector? A backup of the saved annotations will be kept."
     EXECUTION_STATUS = "{device} · {workers} image worker(s)"

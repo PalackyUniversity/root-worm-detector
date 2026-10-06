@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
                                QSplitter, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
-                               QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar, QComboBox)
-from PySide6.QtGui import QMouseEvent, QAction, QUndoStack
+                               QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar)
+from PySide6.QtGui import QMouseEvent, QAction, QActionGroup, QUndoStack
 from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QEvent, QSize, QSignalBlocker
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
@@ -11,7 +11,7 @@ from ui.draggable_image_list import DraggableImageList
 from ui.export_dialog import ExportDialog
 from ui.contour_properties_dialog import ContourPropertiesDialog
 from ui.image_preview import ImagePreview
-from ui.prediction_worker import BatchPredictionWorker
+from ui.prediction_worker import BatchPredictionWorker, InvalidationWorker
 from logic.adaptive_prediction import AdaptivePredictor
 from config.model import Model
 from config.shortcuts import Shortcuts
@@ -45,6 +45,7 @@ class MainWindow(QMainWindow):
         self.__cancel_prediction = False
         self._prediction_thread = None
         self._prediction_pending = []
+        self._invalidation_thread = None
         self._predictor = AdaptivePredictor()
         QApplication.instance().aboutToQuit.connect(self._shutdown_prediction)
         self._close_after_prediction = False
@@ -99,12 +100,6 @@ class MainWindow(QMainWindow):
         self.button_pan.setChecked(True)
         self.button_pan.clicked.connect(self.start_panning)
 
-        self.model_selector = QComboBox()
-        self.model_selector.addItem(Strings.DETECTOR_M, "m")
-        self.model_selector.addItem(Strings.DETECTOR_S, "s")
-        self.model_selector.setCurrentIndex(self.model_selector.findData(Model.DEFAULT_MODEL))
-        self.model_selector.setToolTip(Strings.DETECTOR_TOOLTIP)
-        self.model_selector.setAccessibleName(Strings.DETECTOR_LABEL)
         self.execution_status = QLabel()
 
         # Predict button
@@ -211,7 +206,6 @@ class MainWindow(QMainWindow):
         status_bar.addWidget(self.button_zoom_in)
         status_bar.addWidget(self.label_zoom)
         status_bar.addPermanentWidget(self.execution_status)
-        status_bar.addPermanentWidget(self.model_selector)
         status_bar.addWidget(self.label_measurements)
         status_bar.addWidget(QWidget(), 1)
         status_bar.addPermanentWidget(self.label_time_remaining)
@@ -265,6 +259,20 @@ class MainWindow(QMainWindow):
         self.menu_remove_contour = QAction(Strings.EDIT_REMOVE_CONTOUR, self)
         self.menu_remove_contour.setShortcuts(Shortcuts.CONTOUR_DELETE)
         self.menu_remove_contour.triggered.connect(self.remove_selected_contour)
+
+        self._selected_model = Model.DEFAULT_MODEL
+        self.model_action_group = QActionGroup(self)
+        self.model_action_group.setExclusive(True)
+        self.model_actions = {}
+        for model_id, label in (("m", Strings.DETECTOR_M), ("s", Strings.DETECTOR_S)):
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setChecked(model_id == self._selected_model)
+            action.setData(model_id)
+            action.setToolTip(Strings.DETECTOR_TOOLTIP)
+            self.model_action_group.addAction(action)
+            self.model_actions[model_id] = action
+        self.model_action_group.triggered.connect(self._change_model)
 
         # Menu -> Model -> Start prediction
         self.menu_start_prediction = QAction(Strings.START_PREDICTION, self)
@@ -338,6 +346,8 @@ class MainWindow(QMainWindow):
         menu_edit.addAction(self.menu_select_all_contours)
 
         # Menu setup - Model
+        menu_model.addMenu(Strings.SELECT_MODEL).addActions(self.model_action_group.actions())
+        menu_model.addSeparator()
         menu_model.addAction(self.menu_start_prediction)
         menu_model.addAction(self.menu_repredict)
         menu_model.addAction(self.menu_cancel_prediction)
@@ -365,8 +375,12 @@ class MainWindow(QMainWindow):
         self.update_preview()
         self.update_controls()
 
+    def _can_edit_image(self, data=None):
+        return (self._prediction_thread is None and self._invalidation_thread is None
+                and 0 <= self.__current_index < len(self.__image_data))
+
     def reclassify_selected(self, nice):
-        if self._prediction_thread is not None or self.__current_index < 0:
+        if (self._prediction_thread is not None or self._invalidation_thread is not None) or self.__current_index < 0:
             return
         data = self.__image_data[self.__current_index]
         indices = [index for index in self.__group_selected_indices if 0 <= index < len(data.get("measurements", []))]
@@ -374,7 +388,7 @@ class MainWindow(QMainWindow):
             self.__undo_stack.push(ReclassifyContoursCommand(data, indices, nice))
 
     def reset_annotations(self):
-        if self._prediction_thread is not None or self.__current_index < 0:
+        if (self._prediction_thread is not None or self._invalidation_thread is not None) or self.__current_index < 0:
             return
         data = self.__image_data[self.__current_index]
         self.__group_selected_indices = []
@@ -385,8 +399,8 @@ class MainWindow(QMainWindow):
 
     def update_undo_actions(self):
         """Update the state of undo/redo actions based on undo stack state"""
-        self.menu_undo.setEnabled(self._prediction_thread is None and self.__undo_stack.canUndo())
-        self.menu_redo.setEnabled(self._prediction_thread is None and self.__undo_stack.canRedo())
+        self.menu_undo.setEnabled((self._prediction_thread is None and self._invalidation_thread is None) and self.__undo_stack.canUndo())
+        self.menu_redo.setEnabled((self._prediction_thread is None and self._invalidation_thread is None) and self.__undo_stack.canRedo())
         self.update_preview()  # TODO this is maybe called multiple times
 
     def show_about(self):
@@ -448,10 +462,10 @@ class MainWindow(QMainWindow):
         self.update_preview()
         self.update_controls()
         selected = bool(self.__group_selected_indices)
-        editable = selected and self._prediction_thread is None
+        editable = selected and (self._prediction_thread is None and self._invalidation_thread is None)
         context = QMenu(self)
         add = context.addAction(Strings.ADD_CONTOUR, self.start_drawing)
-        add.setEnabled(self.label_image.data is not None and self._prediction_thread is None)
+        add.setEnabled(self.label_image.data is not None and (self._prediction_thread is None and self._invalidation_thread is None))
         context.addSeparator()
         remove = context.addAction(Strings.REMOVE_CONTOUR, self.remove_selected_contour)
         remove.setEnabled(editable)
@@ -476,7 +490,7 @@ class MainWindow(QMainWindow):
         ContourPropertiesDialog(data, self.__group_selected_indices, self).exec()
 
     def _set_preview_tool(self, tool):
-        if self._prediction_thread is not None and tool == "draw":
+        if (self._prediction_thread is not None or self._invalidation_thread is not None) and tool == "draw":
             return
         self.__drawing = tool == "draw"
         self.__group_select_active = tool == "select"
@@ -756,6 +770,43 @@ class MainWindow(QMainWindow):
         self.menu_cancel_prediction.setEnabled(not enable)
         self.progress_bar.setVisible(not enable)
 
+    def _change_model(self, action):
+        model_id = action.data()
+        if self._prediction_thread is not None or self._invalidation_thread is not None or model_id == self._selected_model:
+            self.model_actions[self._selected_model].setChecked(True)
+            return
+        self._selected_model = model_id
+        pending = []
+        for data in self.__image_data:
+            was_predicted = data.get("predicted", False)
+            data["predicted"] = False
+            if was_predicted:
+                pending.append(dict(data))
+        if pending:
+            worker = InvalidationWorker(pending, self)
+            self._invalidation_thread = worker
+            worker.finished.connect(self._invalidation_finished)
+            self.model_action_group.setEnabled(False)
+            worker.start()
+        # Only status changed: retain rows, selection, scroll and decoded pixels.
+        for index in range(self.panel_image_list.count()):
+            item = self.panel_image_list.item(index)
+            item.setData(Qt.UserRole, False)
+            item.setToolTip(item.data(Qt.UserRole + 1))
+        self.update_controls()
+
+    def _invalidation_finished(self):
+        worker = self._invalidation_thread
+        errors = worker.errors
+        self._invalidation_thread = None
+        worker.deleteLater()
+        self.model_action_group.setEnabled(True)
+        self.update_controls()
+        if errors:
+            QMessageBox.warning(self, Strings.MODEL_CHANGE_SAVE_FAILED, "\n".join(errors))
+        if self._close_after_prediction:
+            self.close()
+
     def start_prediction(self):
         self._start_prediction_batch([data for data in self.__image_data if not data.get("predicted", False)])
 
@@ -767,7 +818,7 @@ class MainWindow(QMainWindow):
         self._start_prediction_batch([self.__image_data[self.__current_index]], replace=True)
 
     def _start_prediction_batch(self, records, replace=False):
-        if self._prediction_thread is not None or not records:
+        if self._prediction_thread is not None or self._invalidation_thread is not None or not records:
             return
         self.__cancel_prediction = False
         self._prediction_pending = records
@@ -776,14 +827,14 @@ class MainWindow(QMainWindow):
         self._prediction_completed = 0
         for data in records:
             data["_prediction_queued"] = True
-        worker = BatchPredictionWorker(list(self._prediction_by_path), self.model_selector.currentData(),
+        worker = BatchPredictionWorker(list(self._prediction_by_path), self._selected_model,
                                        self._predictor, self, replace=replace)
         self._prediction_thread = worker
         worker.image_started.connect(self._prediction_started)
         worker.image_ready.connect(self._prediction_result)
         worker.status_changed.connect(self._prediction_status)
         worker.finished.connect(self._prediction_finished)
-        self.model_selector.setEnabled(False)
+        self.model_action_group.setEnabled(False)
         self.prediction_enable_controls(False)
         self.update_controls()
         self.update_image_list()
@@ -824,7 +875,7 @@ class MainWindow(QMainWindow):
         worker.deleteLater()
         self._prediction_thread = None
         self._prediction_pending = []
-        self.model_selector.setEnabled(True)
+        self.model_action_group.setEnabled(True)
         self._end_progress()
         self.prediction_enable_controls(True)
         self.update_image_list()
@@ -840,12 +891,18 @@ class MainWindow(QMainWindow):
             self._prediction_thread.cancel()
 
     def _shutdown_prediction(self):
+        if self._invalidation_thread is not None:
+            self._invalidation_thread.wait()
         if self._prediction_thread is not None:
             self._prediction_thread.cancel()
             self._prediction_thread.wait()
         self._predictor.close()
 
     def closeEvent(self, event):
+        if self._invalidation_thread is not None:
+            self._close_after_prediction = True
+            event.ignore()
+            return
         if self._prediction_thread is not None:
             self._close_after_prediction = True
             self.cancel_prediction_process()
@@ -894,7 +951,7 @@ class MainWindow(QMainWindow):
 
         # If in contour drawing mode, record the point and update the preview.
         elif self.__drawing:
-            if self._prediction_thread is not None:
+            if (self._prediction_thread is not None or self._invalidation_thread is not None):
                 return
             h, w = self.__image_data[self.__current_index]["image"].shape[:2]
             if not (0 <= pt.x() < w and 0 <= pt.y() < h):
@@ -939,7 +996,7 @@ class MainWindow(QMainWindow):
             self.update_preview()
             return
 
-        if self.__drawing and self.__current_contour and self._prediction_thread is None:
+        if self.__drawing and self.__current_contour and (self._prediction_thread is None and self._invalidation_thread is None):
             pt = self.get_image_coordinates(event)
             h, w = self.__image_data[self.__current_index]["image"].shape[:2]
             pt = QPoint(min(w - 1, max(0, pt.x())), min(h - 1, max(0, pt.y())))
@@ -1008,7 +1065,7 @@ class MainWindow(QMainWindow):
             return
 
         # If in drawing mode.
-        if self.__drawing and self.__current_contour and self._prediction_thread is None:
+        if self.__drawing and self.__current_contour and (self._prediction_thread is None and self._invalidation_thread is None):
             # Create an undo command for this operation
             try:
                 command = AddContourCommand(self.__image_data[self.__current_index], self.__current_contour)
@@ -1030,7 +1087,7 @@ class MainWindow(QMainWindow):
         return self.label_image.image_point(event.position()).toPoint()
 
     def remove_selected_contour(self):
-        if self._prediction_thread is not None:
+        if (self._prediction_thread is not None or self._invalidation_thread is not None):
             return
         if self.__current_index == -1 or not self.__group_selected_indices:
             return
@@ -1057,7 +1114,7 @@ class MainWindow(QMainWindow):
         ExportLogic.export_data(dialog.get_file_name(), dialog.get_selections(), self.__image_data)
 
     def update_controls(self):
-        busy = self._prediction_thread is not None
+        busy = self._prediction_thread is not None or self._invalidation_thread is not None
         has_images = len(self.__image_data) > 0 and self.__current_index != -1
         can_edit = has_images and not busy
         self.menu_zoom_in.setEnabled(has_images)
@@ -1094,7 +1151,7 @@ class MainWindow(QMainWindow):
         self.update_undo_actions()
 
     def keyPressEvent(self, event):
-        if self._prediction_thread is not None:
+        if (self._prediction_thread is not None or self._invalidation_thread is not None):
             return
         if event.key() == Qt.Key_Delete:
             if self.focusWidget() == self.label_image or not self.panel_image_list.hasFocus():
