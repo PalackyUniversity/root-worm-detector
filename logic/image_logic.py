@@ -11,14 +11,14 @@ from config.strings import Strings
 
 class ImageLogic:
     @staticmethod
-    def load_image(file_path):
-        img = cv2.imread(file_path)
-        if img is None:
+    def load_image(file_path, *, load_pixels=True):
+        """Read saved results without decoding every imported scan."""
+        if not os.path.isfile(file_path):
             raise ValueError(Strings.IMAGE_LOAD_ERROR_MESSAGE.format(file_path=file_path))
 
         data = {
             "path": file_path,
-            "image": img,
+            "image": None,
             "contours": [],
             "predicted": False,
             "processing": False
@@ -34,7 +34,19 @@ class ImageLogic:
                     data["scores"] = [float(i) for i in meta.get("scores", [])]
             except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
                 pass
+        if load_pixels:
+            ImageLogic.ensure_pixels(data)
         return data
+
+    @staticmethod
+    def ensure_pixels(data):
+        """Decode only when a preview or prediction needs this scan."""
+        if data.get("image") is None:
+            image = cv2.imread(data["path"])
+            if image is None:
+                raise ValueError(Strings.IMAGE_LOAD_ERROR_MESSAGE.format(file_path=data["path"]))
+            data["image"] = image
+        return data["image"]
 
     @staticmethod
     def draw_annotations(data, cross_preview_mode, group_selected_indices, effective_scale, show_contours=True):

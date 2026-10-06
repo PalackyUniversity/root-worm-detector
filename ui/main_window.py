@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
                                QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar)
 from PySide6.QtGui import QImage, QPixmap, QMouseEvent, QAction, QUndoStack
-from PySide6.QtCore import Qt, QPoint, QRect
+from PySide6.QtCore import Qt, QPoint, QRect, QSignalBlocker
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
 from logic.image_logic import ImageLogic
@@ -25,6 +25,7 @@ class MainWindow(QMainWindow):
 
         # Initialize variables
         self.__image_data = []
+        self._preview_data = None
         self.__current_index = -1
         self.__drawing = False
         self.__current_contour = []
@@ -447,7 +448,7 @@ class MainWindow(QMainWindow):
         try:
             for i, f in enumerate(files_to_load):
                 try:
-                    data = ImageLogic.load_image(f)
+                    data = ImageLogic.load_image(f, load_pixels=False)
                     self.__image_data.append(data)
                 except Exception as e:
                     QMessageBox.critical(self, Strings.IMAGE_LOAD_ERROR_TITLE, str(e))
@@ -458,26 +459,37 @@ class MainWindow(QMainWindow):
             self.update_controls()
 
     def update_image_list(self):
-        self.panel_image_list.clear()
+        current = self.panel_image_list.currentItem()
+        current_path = current.data(Qt.UserRole + 1) if current is not None else None
+        row = min(max(self.__current_index, 0), len(self.__image_data) - 1)
+        with QSignalBlocker(self.panel_image_list):
+            self.panel_image_list.clear()
+            if self.__image_data:
+                for idx, data in enumerate(self.__image_data):
+                    item = QListWidgetItem(os.path.basename(data["path"]))
+                    item.setData(Qt.UserRole + 1, data["path"])
+                    item.setToolTip(data["path"])
 
-        if self.__image_data:
-            for idx, data in enumerate(self.__image_data):
-                item = QListWidgetItem(os.path.basename(data["path"]))
-                item.setToolTip(data["path"])
+                    if data.get("processing", False):
+                        item.setIcon(Icons.create_loading_icon())
+                    item.setData(Qt.UserRole, data.get("predicted", False) and not data.get("processing", False))
 
-                if data.get("processing", False):
-                    item.setIcon(Icons.create_loading_icon())
-                item.setData(Qt.UserRole, data.get("predicted", False) and not data.get("processing", False))
+                    self.panel_image_list.addItem(item)
 
-                self.panel_image_list.addItem(item)
-
-            if self.__image_data and self.panel_image_list.currentRow() == -1:
-                self.panel_image_list.setCurrentRow(0)
-
+            for index, data in enumerate(self.__image_data):
+                if data["path"] == current_path:
+                    row = index
+                    break
+            self.panel_image_list.setCurrentRow(row)
+        selected = self.__image_data[row] if row >= 0 else None
+        if row != self.__current_index or selected is not self._preview_data:
+            self.on_image_selected(row)
         self.update_controls()
 
     def on_image_selected(self, index):
         self.__current_index = index
+        if 0 <= index < len(self.__image_data):
+            self.__image_data[index].pop("load_error", None)
         self.__current_contour = []
         self.__group_selected_indices = []
 
@@ -493,12 +505,30 @@ class MainWindow(QMainWindow):
         self._show_contours = self.menu_toggle_contours.isChecked()
         self.update_preview()
 
+    def _release_preview(self):
+        self.label_image.clear()
+        if self._preview_data is not None:
+            self._preview_data["image"] = None
+        self._preview_data = None
+
     def update_preview(self):
         if self.__current_index < 0 or self.__current_index >= len(self.__image_data):
+            self._release_preview()
             self.label_image.setText(Strings.IMAGE_PREVIEW)
             return
 
         data = self.__image_data[self.__current_index]
+        if data is not self._preview_data:
+            self._release_preview()
+            self._preview_data = data
+        if not data.get("load_error"):
+            try:
+                ImageLogic.ensure_pixels(data)
+            except (OSError, ValueError, cv2.error):
+                data["load_error"] = Strings.IMAGE_LOAD_ERROR_MESSAGE.format(file_path=data["path"])
+        if data.get("load_error"):
+            self.label_image.setText(data["load_error"])
+            return
         img = ImageLogic.draw_annotations(
             data,
             self.__cross_preview_mode,
@@ -601,7 +631,12 @@ class MainWindow(QMainWindow):
                 self.__image_data[idx]["processing"] = True
                 self.update_image_list()
 
-                contours, scores = PredictionLogic.predict_contours(self.__image_data[idx]["image"], self.__image_data[idx]["path"])
+                data = self.__image_data[idx]
+                try:
+                    contours, scores = PredictionLogic.predict_contours(ImageLogic.ensure_pixels(data), data["path"])
+                finally:
+                    if data is not self._preview_data:
+                        data["image"] = None
                 self.__image_data[idx]["contours"] = contours
                 self.__image_data[idx]["scores"] = scores
 
