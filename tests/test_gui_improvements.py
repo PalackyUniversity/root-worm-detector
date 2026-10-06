@@ -82,6 +82,38 @@ class GuiImprovementsTests(unittest.TestCase):
         self.window._end_progress()
         self.assertTrue(self.window.label_time_remaining.isHidden())
 
+    def test_remaining_time_counts_down_between_results_and_stops(self):
+        from unittest.mock import patch
+        from PySide6.QtTest import QTest
+        from config.strings import Strings
+
+        with patch('ui.main_window.monotonic', return_value=100) as clock:
+            self.window._begin_progress()
+            clock.return_value = 110
+            self.window._update_progress(1, 4)
+            self.assertEqual(self.window.label_time_remaining.text(),
+                             Strings.TIME_REMAINING_SECONDS.format(seconds=30))
+            clock.return_value = 111
+            QTest.qWait(1150)
+            self.assertEqual(self.window.label_time_remaining.text(),
+                             Strings.TIME_REMAINING_SECONDS.format(seconds=29))
+            self.assertEqual(self.window.progress_bar.value(), 25)
+            clock.return_value = 120
+            self.window._update_progress(2, 4)
+            self.assertEqual(self.window.label_time_remaining.text(),
+                             Strings.TIME_REMAINING_SECONDS.format(seconds=20))
+            clock.return_value = 150
+            QTest.qWait(1150)
+            self.assertEqual(self.window.label_time_remaining.text(),
+                             Strings.TIME_REMAINING_SECONDS.format(seconds=0))
+            self.window._end_progress()
+            QTest.qWait(1150)
+            self.assertEqual(self.window.label_time_remaining.text(), '')
+            self.window._begin_progress()
+            QTest.qWait(1150)
+            self.assertEqual(self.window.label_time_remaining.text(), Strings.ESTIMATING)
+            self.window._end_progress()
+
     def _select(self, point, offset=QPointF()):
         self.window.start_group_selection()
         label = self.window.label_image

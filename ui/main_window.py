@@ -2,7 +2,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                                QSplitter, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
                                QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar, QInputDialog)
 from PySide6.QtGui import QMouseEvent, QAction, QActionGroup, QUndoStack
-from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QEvent, QSize, QSignalBlocker, QSettings
+from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QEvent, QSize, QSignalBlocker, QSettings, QTimer
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
 from logic.image_logic import ImageLogic
@@ -182,6 +182,10 @@ class MainWindow(QMainWindow):
         self.label_time_remaining = QLabel()
         self.label_time_remaining.setVisible(False)
         self._progress_started = None
+        self._progress_deadline = None
+        self._progress_timer = QTimer(self)
+        self._progress_timer.setInterval(1000)
+        self._progress_timer.timeout.connect(self._refresh_remaining_time)
 
         # Right toolbar stays at its preferred width outside the splitter.
         panel_tool = QWidget()
@@ -600,6 +604,8 @@ class MainWindow(QMainWindow):
 
     def _begin_progress(self, process_events=True):
         self._progress_started = monotonic()
+        self._progress_deadline = None
+        self._progress_timer.start()
         self.progress_bar.setValue(0)
         self.label_time_remaining.setText(Strings.ESTIMATING)
         self.progress_bar.show()
@@ -610,19 +616,27 @@ class MainWindow(QMainWindow):
     def _update_progress(self, completed, total, process_events=True):
         self.progress_bar.setValue(int(completed / max(total, 1) * 100))
         if completed and self._progress_started is not None:
-            remaining = max(0, math.ceil(
-                (monotonic() - self._progress_started) / completed * (total - completed)
-            ))
-            if remaining >= 60:
-                text = Strings.TIME_REMAINING_MINUTES.format(
-                    minutes=remaining // 60, seconds=remaining % 60)
-            else:
-                text = Strings.TIME_REMAINING_SECONDS.format(seconds=remaining)
-            self.label_time_remaining.setText(text)
+            now = monotonic()
+            remaining = (now - self._progress_started) / completed * max(0, total - completed)
+            self._progress_deadline = now + remaining
+            self._refresh_remaining_time()
         if process_events:
             QApplication.processEvents()
 
+    def _refresh_remaining_time(self):
+        if self._progress_deadline is None:
+            return
+        remaining = max(0, math.ceil(self._progress_deadline - monotonic()))
+        if remaining >= 60:
+            text = Strings.TIME_REMAINING_MINUTES.format(
+                minutes=remaining // 60, seconds=remaining % 60)
+        else:
+            text = Strings.TIME_REMAINING_SECONDS.format(seconds=remaining)
+        self.label_time_remaining.setText(text)
+
     def _end_progress(self):
+        self._progress_timer.stop()
+        self._progress_deadline = None
         self.progress_bar.hide()
         self.label_time_remaining.hide()
         self.label_time_remaining.clear()
