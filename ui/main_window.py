@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
                                QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar)
-from PySide6.QtGui import QImage, QPixmap, QMouseEvent, QAction, QUndoStack
-from PySide6.QtCore import Qt, QPoint, QRect, QSignalBlocker
+from PySide6.QtGui import QImage, QPixmap, QMouseEvent, QAction, QUndoStack, QPainter, QPalette, QColor, QPen
+from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QRectF, QSignalBlocker
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
 from logic.image_logic import ImageLogic
@@ -33,6 +33,8 @@ class MainWindow(QMainWindow):
         self.__group_select_active = False
         self.__group_selection_start = None
         self.__group_selection_rect = None
+        self.__selection_press_position = None
+        self.__selection_dragged = False
         self.__zoom_factor = 1.0
         self.__effective_scale = 1
         self.__cancel_prediction = False
@@ -546,16 +548,6 @@ class MainWindow(QMainWindow):
                 self.__effective_scale
             )
 
-        # If group selecting
-        if self.__group_select_active and self.__group_selection_rect is not None:
-            ImageLogic.draw_dashed_rectangle(
-                img,
-                (self.__group_selection_rect.left(), self.__group_selection_rect.top()),
-                (self.__group_selection_rect.right(), self.__group_selection_rect.bottom()),
-                (0, 0, 255),  # TODO color
-                self.__effective_scale
-            )
-
         # Draw prediction scores with dynamic scaling and color based on selection
         if (
             self._show_confidences and
@@ -584,6 +576,24 @@ class MainWindow(QMainWindow):
             Qt.KeepAspectRatio,
             Qt.FastTransformation
         )
+        if self.__group_select_active and self.__group_selection_rect is not None:
+            selection = self.__group_selection_rect
+            rect = QRectF(selection.x() * self.__effective_scale,
+                          selection.y() * self.__effective_scale,
+                          selection.width() * self.__effective_scale,
+                          selection.height() * self.__effective_scale)
+            painter = QPainter(scaled)
+            painter.setRenderHint(QPainter.Antialiasing)
+            accent = self.palette().color(QPalette.Highlight)
+            fill = QColor(accent)
+            fill.setAlpha(35)
+            painter.setPen(QPen(QColor(255, 255, 255, 180), 3))
+            painter.setBrush(fill)
+            painter.drawRoundedRect(rect, 2, 2)
+            painter.setPen(QPen(accent, 1.5))
+            painter.setBrush(Qt.NoBrush)
+            painter.drawRoundedRect(rect, 2, 2)
+            painter.end()
         self.label_image.setPixmap(scaled)
         self.label_image.resize(scaled.size())
         self.label_zoom.setText(f"{self.__effective_scale * 100:.0f}%")
@@ -600,7 +610,7 @@ class MainWindow(QMainWindow):
         v_bar.setValue(factor * v_bar.value() + self.panel_image.viewport().height() / 2 * (factor - 1))
 
     def zoom_step_in(self):
-        self.zoom(min(self.__zoom_factor * 1.2, 8.0))
+        self.zoom(min(self.__zoom_factor * 1.2, Config.MAX_ZOOM_FACTOR))
 
     def zoom_step_out(self):
         self.zoom(max(self.__zoom_factor * 0.8, 0.1))
@@ -703,14 +713,17 @@ class MainWindow(QMainWindow):
         self.update_preview()
 
     def preview_mouse_press(self, event: QMouseEvent):
-        if not len(self.__image_data) > 0 or self.__current_index == -1:
+        if (self._preview_data is None or self._preview_data.get("image") is None
+                or event.button() != Qt.LeftButton):
             return
 
         pt = self.get_image_coordinates(event)
         # If group selection tool is active, start group selection.
         if self.__group_select_active:
             self.__group_selection_start = pt
-            self.__group_selection_rect = QRect(pt, pt)
+            self.__selection_press_position = QPointF(event.position())
+            self.__selection_dragged = False
+            self.__group_selection_rect = None
             return
 
         # If in contour drawing mode, record the point and update the preview.
@@ -763,6 +776,11 @@ class MainWindow(QMainWindow):
         # --- End panning logic ---
 
         if self.__group_selection_start is not None:
+            movement = event.position() - self.__selection_press_position
+            if movement.manhattanLength() >= QApplication.startDragDistance():
+                self.__selection_dragged = True
+            if not self.__selection_dragged:
+                return
             pt = self.get_image_coordinates(event)
             self.__group_selection_rect = QRect(self.__group_selection_start, pt).normalized()
             self.update_preview()
@@ -785,22 +803,37 @@ class MainWindow(QMainWindow):
         # --- End panning logic ---
 
         # Handle group selection if active.
-        if self.__group_selection_rect is not None and self.__group_select_active:
+        if (event.button() == Qt.LeftButton and self.__group_selection_start is not None
+                and self.__group_select_active):
             data = self.__image_data[self.__current_index]
             self.__group_selected_indices = []
-
-            for i, cnt in enumerate(data["contours"]):
-                m = cv2.moments(cnt)
-
-                if m["m00"] != 0:
-                    cx = int(m["m10"] / m["m00"])
-                    cy = int(m["m01"] / m["m00"])
-                    if self.__group_selection_rect.contains(QPoint(cx, cy)):
+            movement = event.position() - self.__selection_press_position
+            if self.__selection_dragged or movement.manhattanLength() >= QApplication.startDragDistance():
+                rect = QRect(self.__group_selection_start, self.get_image_coordinates(event)).normalized()
+                for i, cnt in enumerate(data["contours"]):
+                    m = cv2.moments(cnt)
+                    if m["m00"] != 0 and rect.contains(QPoint(
+                            int(m["m10"] / m["m00"]), int(m["m01"] / m["m00"]))):
                         self.__group_selected_indices.append(i)
+            else:
+                # Use screen-space tolerance so tiny contours remain clickable at fit.
+                pt = self.get_image_coordinates(event)
+                nearest, best_distance = None, -6.0 / self.__effective_scale
+                for i, contour in enumerate(data["contours"]):
+                    distance = cv2.pointPolygonTest(contour, (pt.x(), pt.y()), True)
+                    if distance >= 0:
+                        nearest = i
+                        break
+                    if distance >= best_distance:
+                        nearest, best_distance = i, distance
+                if nearest is not None:
+                    self.__group_selected_indices = [nearest]
 
             # Clear temporary group selection variables but keep the tool active.
             self.__group_selection_rect = None
             self.__group_selection_start = None
+            self.__selection_press_position = None
+            self.__selection_dragged = False
             self.update_preview()
             self.update_controls()
             return
