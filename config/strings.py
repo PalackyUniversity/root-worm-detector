@@ -1,6 +1,22 @@
 class Strings:
     # Main Window
     WINDOW_TITLE = "Root Worm Detector"
+    MEASUREMENT_TOOLTIP = "Green: nice; red: not nice; grey: unclassified. Blue contour outline: selected. Nice threshold: 0.3. Manual overrides do not change model probabilities or areas."
+    MARK_NICE = "Mark nice"
+    MARK_NOT_NICE = "Mark not nice"
+    RESET_ANNOTATIONS = "Reset all edits"
+    RESTORE_CLASSIFICATION = "Restore model"
+    MARK_NICE_TOOLTIP = "Mark all selected contours as nice (undoable); preserve model probabilities and areas."
+    MARK_NOT_NICE_TOOLTIP = "Mark all selected contours as not nice (undoable); preserve model probabilities and areas."
+    RESTORE_CLASSIFICATION_TOOLTIP = "Reset all edits on this image: restore original detections and labels, and remove manually added objects (undoable)."
+    MEASUREMENT_SUMMARY = "Total: {total} | Nice: {nice}"
+    MEASUREMENT_FILE_TOOLTIP = "{path}\nTotal: {total} | Nice: {nice} | Unclassified: {unknown}\n{pipeline}"
+    PREDICTION_FAILED = "Prediction failed"
+    EXPORT_NICE = "Nice counts and refined nice-female areas (mm²)"
+    EXPORT_INDIVIDUAL = "Per-female measurements (Females sheet / companion CSV)"
+    EXPORT_CONTOUR_TOTAL = "Total display-contour area (px²; not refined mask area)"
+    EXPORT_CONTOUR_AVERAGE = "Average display-contour area (px²; + stdev, stderr, variance)"
+    EXPORT_CONTOUR_MEDIAN = "Median display-contour area (px²; + quantiles)"
 
     # Button texts & tooltips
     ADD_CONTOUR = "Add Contour"
@@ -9,12 +25,12 @@ class Strings:
     GROUP_SELECT = "Group Select"
     CROSS_PREVIEW_TOOLTIP = "Toggle dot preview mode for contours"
     PREDICT = "Predict"
-    ZOOM_OUT_SYMBOL = "−"
-    ZOOM_IN_SYMBOL = "+"
     CANCEL = "Cancel"
     ESTIMATING = "Estimating…"
     TIME_REMAINING_SECONDS = "{seconds}s remaining"
     TIME_REMAINING_MINUTES = "{minutes}m {seconds}s remaining"
+    ZOOM_OUT_SYMBOL = "−"
+    ZOOM_IN_SYMBOL = "+"
 
     # Menus
     MENU_FILE = "File"
@@ -31,6 +47,11 @@ class Strings:
 
     # Edit Menu items
     EDIT_ADD_CONTOUR = "Add Contour"
+    CONTOUR_CLASSIFICATION_FAILED = "Could not classify the drawn contour"
+    CONTOUR_CLASSIFICATION_INVALID_SHAPE = "The drawn contour is too small or outside the image to classify."
+    CONTOUR_CLASSIFICATION_INVALID_FEATURES = "The contour could not be classified because its measured features are invalid."
+    CONTOUR_CLASSIFICATION_INVALID_PROBABILITY = "The classifier returned an invalid probability."
+    EDIT_SELECT_ALL_CONTOURS = "Select All Contours"
     EDIT_REMOVE_CONTOUR = "Remove Contour"
     EDIT_UNDO = "Undo"
     EDIT_REDO = "Redo"
@@ -57,7 +78,6 @@ class Strings:
     CONTEXT_IMPORT_FILES = "Import Files"
     CONTEXT_IMPORT_FOLDER = "Import Folder"
     CONTEXT_CLEAR_GROUP_SELECT = "Clear Group Selection"
-
     CONTOUR_PROPERTIES = "Properties…"
     CONTOUR_PROPERTIES_TITLE = "Contour properties"
     PROPERTY = "Property"
@@ -73,9 +93,6 @@ class Strings:
     CLASS_UNKNOWN = "Unknown"
     NOT_AVAILABLE = "Not available"
     NO_OVERRIDE = "None"
-
-    MARK_NICE = "Mark nice"
-    MARK_NOT_NICE = "Mark not nice"
 
     # File dialog
     SELECT_IMAGES = "Select Images"

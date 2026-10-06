@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import QDialog, QFormLayout, QCheckBox, QDialogButtonBox, QFileDialog
 from datetime import datetime
+from config.strings import Strings
 
 
 class ExportDialog(QDialog):
@@ -15,6 +16,11 @@ class ExportDialog(QDialog):
         self.avgAreaCheck = QCheckBox("Average Contour Area (+ stdev, stderr, variance)")
         self.medianAreaCheck = QCheckBox("Median Contour Area (+ Q05, Q10, Q25, Q75, Q90, Q95)")
         self.descStatsCheck = QCheckBox("Other Descriptive Stats (min, max, range, skewness, kurtosis)")
+        self.niceCheck = QCheckBox(Strings.EXPORT_NICE)
+        self.individualCheck = QCheckBox(Strings.EXPORT_INDIVIDUAL)
+        self.totalAreaCheck.setText(Strings.EXPORT_CONTOUR_TOTAL)
+        self.avgAreaCheck.setText(Strings.EXPORT_CONTOUR_AVERAGE)
+        self.medianAreaCheck.setText(Strings.EXPORT_CONTOUR_MEDIAN)
 
 
         self.buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
@@ -23,7 +29,7 @@ class ExportDialog(QDialog):
 
         layout = QFormLayout(self)
 
-        for cb in (self.countCheck, self.totalAreaCheck, self.avgAreaCheck, self.medianAreaCheck, self.descStatsCheck):
+        for cb in (self.countCheck, self.niceCheck, self.individualCheck, self.totalAreaCheck, self.avgAreaCheck, self.medianAreaCheck, self.descStatsCheck):
             cb.setChecked(True)
             layout.addRow(cb)
 
@@ -56,6 +62,8 @@ class ExportDialog(QDialog):
     def get_selections(self):
         return {
             "count": self.countCheck.isChecked(),
+            "nice": self.niceCheck.isChecked(),
+            "individual": self.individualCheck.isChecked(),
             "total": self.totalAreaCheck.isChecked(),
             "avg": self.avgAreaCheck.isChecked(),
             "median": self.medianAreaCheck.isChecked(),
@@ -64,4 +72,3 @@ class ExportDialog(QDialog):
 
     def get_file_name(self):
         return self.file_name
-

@@ -7,6 +7,17 @@ import json
 import cv2
 
 class PredictionLogic:
+    _pipelines = {}
+
+    @classmethod
+    def predict_image(cls, file_path, device=None):
+        from logic.inference_pipeline import InferencePipeline
+
+        key = str(device or "auto")
+        if key not in cls._pipelines:
+            cls._pipelines[key] = InferencePipeline(device)
+        return cls._pipelines[key].predict(file_path)
+
     @staticmethod
     def predict(
             model_path: str,
@@ -75,28 +86,8 @@ class PredictionLogic:
 
     @classmethod
     def predict_contours(cls, image, file_path):
-        predicted_contours, predicted_scores = cls.predict(
-                model_type="ultralytics",
-                model_path="models/v2_best.pt",
-                model_confidence_threshold=Model.MIN_OBJECT_CONFIDENCE,
-                source=image,
-            )
+        from logic.image_logic import ImageLogic
 
-        contours, scores = [], []
-        for cnt, score in zip(predicted_contours, predicted_scores):
-            x, y, w, h = cv2.boundingRect(cnt)
-            if w*h < Model.MAX_OBJECT_SIZE:
-                contours.append(cnt)
-                scores.append(float(score))
-
-        # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        # contours, _ = cv2.findContours(gray, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        meta = {
-            "prediction_time": datetime.datetime.now().isoformat(),
-            "model_version": Model.CURRENT_MODEL_VERSION,
-            "contours": [cnt.tolist() for cnt in contours],
-            "scores": scores
-        }
-        with open(file_path + "_contours.json", "w") as f:
-            json.dump(meta, f)
-        return contours, scores
+        result = cls.predict_image(file_path)
+        ImageLogic.save_image_data(dict(result, path=file_path))
+        return result["contours"], result["scores"]

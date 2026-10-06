@@ -1,25 +1,29 @@
 from datetime import datetime
+from copy import deepcopy
 
 import numpy as np
 import json
 import cv2
 import os
+import shutil
+import tempfile
 
 from config.model import Model
 from config.strings import Strings
+from logic import measurement
 
 
 class ImageLogic:
     @staticmethod
     def load_image(file_path, *, load_pixels=True):
-        """Read saved results without decoding every imported scan."""
-        if not os.path.isfile(file_path):
-            raise ValueError(Strings.IMAGE_LOAD_ERROR_MESSAGE.format(file_path=file_path))
-
+        """Read headers and saved results; optionally defer decoding the scan."""
         data = {
             "path": file_path,
             "image": None,
             "contours": [],
+            "scores": [],
+            "measurements": [],
+            "dpi": measurement.read_dpi(file_path),
             "predicted": False,
             "processing": False
         }
@@ -28,14 +32,15 @@ class ImageLogic:
             try:
                 with open(json_path, "r") as fp:
                     meta = json.load(fp)
-                if int(meta.get("model_version", 0)) >= Model.CURRENT_MODEL_VERSION:
-                    data["predicted"] = True
-                    data["contours"] = [np.array(cnt, dtype=np.int32) for cnt in meta.get("contours", [])]
-                    data["scores"] = [float(i) if i is not None else None for i in meta.get("scores", [])]
-                    for key in ("measurements", "nice_threshold", "pipeline", "provenance", "dpi"):
+                if (int(meta.get("model_version", 0)) == Model.CURRENT_MODEL_VERSION
+                        and meta.get("pipeline") == Model.PIPELINE_ID
+                        and len(meta.get("scores", [])) == len(meta.get("contours", []))
+                        and len(meta.get("measurements", [])) == len(meta.get("contours", []))):
+                    for key in ("scores", "measurements", "dpi", "pipeline", "nice_threshold", "provenance", "predicted", "original_annotations"):
                         if key in meta:
                             data[key] = meta[key]
-            except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+                    data["contours"] = [np.array(contour, dtype=np.int32) for contour in meta["contours"]]
+            except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
                 pass
         if load_pixels:
             ImageLogic.ensure_pixels(data)
@@ -43,12 +48,12 @@ class ImageLogic:
 
     @staticmethod
     def ensure_pixels(data):
-        """Decode only when a preview or prediction needs this scan."""
+        """Decode on demand without replacing annotations or manual edits."""
         if data.get("image") is None:
-            image = cv2.imread(data["path"])
-            if image is None:
+            img = measurement.read_image(data["path"])
+            if img is None:
                 raise ValueError(Strings.IMAGE_LOAD_ERROR_MESSAGE.format(file_path=data["path"]))
-            data["image"] = image
+            data["image"] = img
         return data["image"]
 
     @staticmethod
@@ -58,7 +63,11 @@ class ImageLogic:
         # Draw contours using cross preview if enabled, but only if show_contours is True
         if show_contours:
             for i, cnt in enumerate(data["contours"]):
-                color = (0, 0, 255) if i in group_selected_indices else (0, 255, 0)  # TODO color
+                records = data.get("measurements", [])
+                record = records[i] if i < len(records) else {}
+                color = (0, 255, 0) if record.get("nice") is True else (0, 0, 255)
+                if record.get("nice") is None:
+                    color = (170, 170, 170)
 
                 if cross_preview_mode:
                     m = cv2.moments(cnt)
@@ -77,7 +86,14 @@ class ImageLogic:
 
                 else:
                     # Draw the full contour outline.
-                    cv2.drawContours(img, [cnt], -1, color, 2)
+                    cv2.drawContours(img, [cnt], -1, color, 1)
+
+                if i in group_selected_indices:
+                    left, top, width, height = cv2.boundingRect(cnt)
+                    margin = max(2, int(6 / effective_scale))
+                    start, end = (left-margin, top-margin), (left+width+margin, top+height+margin)
+                    ImageLogic.draw_dashed_rectangle(img, start, end, (255, 255, 255), effective_scale, desired_thickness=4)
+                    ImageLogic.draw_dashed_rectangle(img, start, end, (255, 210, 0), effective_scale, desired_thickness=2)
 
         return img
 
@@ -137,8 +153,29 @@ class ImageLogic:
         # except Exception:
         #     return np.array(points, dtype=np.int32)
 
+    @staticmethod
+    def annotation_snapshot(data):
+        return dict(contours=[cnt.tolist() for cnt in data["contours"]],
+                    scores=deepcopy(data.get("scores", [])),
+                    measurements=deepcopy(data.get("measurements", [])))
+
+    @staticmethod
+    def preserve_original_annotations(data):
+        if "original_annotations" in data:
+            return
+        snapshot = ImageLogic.annotation_snapshot(data)
+        indices = [i for i, record in enumerate(snapshot["measurements"])
+                   if record.get("status") != "manual"]
+        snapshot = {key: [values[i] for i in indices] for key, values in snapshot.items()}
+        for record in snapshot["measurements"]:
+            if "nice_override" in record:
+                record["nice"] = record.get("model_nice")
+                record.pop("nice_override")
+        data["original_annotations"] = snapshot
+
     @classmethod
-    def add_contour(cls, data, cnt):
+    def manual_contour_geometry(cls, cnt):
+        """Build the same outline for live drawing and the saved contour."""
         # If only one point is selected, create a circle contour.
         if len(cnt) <= 5:
             center = cnt[0]
@@ -149,14 +186,33 @@ class ImageLogic:
                 for a in angles
             ]
             circle_contour = np.array(circle_points, dtype=np.int32).reshape((-1, 1, 2))
-            data["contours"].append(circle_contour)
-            data["scores"].append(1)
+            contour = circle_contour
 
         # If more than one point is drawn, proceed as before.
         else:
             contour = np.array(cnt, dtype=np.int32)
-            data["contours"].append(ImageLogic.smooth_contour(contour))
-            data["scores"].append(1)
+            contour = ImageLogic.smooth_contour(contour)
+
+        return contour
+
+    @classmethod
+    def prepare_manual_contour(cls, data, cnt):
+        from logic.manual_classification import classify_contour
+
+        contour = cls.manual_contour_geometry(cnt)
+        cls.ensure_pixels(data)
+        return contour, classify_contour(data, contour)
+
+    @classmethod
+    def add_contour(cls, data, cnt, *, prepared=None):
+        contour, record = prepared if prepared is not None else cls.prepare_manual_contour(data, cnt)
+        cls.preserve_original_annotations(data)
+        data.setdefault("scores", [None]*len(data["contours"]))
+        data.setdefault("measurements", [dict(status="manual", nice=None, area_mm2=None)
+                                         for _ in data["contours"]])
+        data["contours"].append(contour.copy())
+        data["scores"].append(None)
+        data["measurements"].append(deepcopy(record))
 
         cls.save_image_data(data)
 
@@ -167,13 +223,37 @@ class ImageLogic:
         meta = {
             "prediction_time": datetime.now().isoformat(),
             "model_version": Model.CURRENT_MODEL_VERSION,
-            "contours": [cnt.tolist() for cnt in data["contours"]]
+            "contours": [cnt.tolist() for cnt in data["contours"]],
+            "scores": data.get("scores", []),
+            "measurements": data.get("measurements", []),
+            "pipeline": data.get("pipeline", Model.PIPELINE_ID),
+            "predicted": bool(data.get("predicted", False)),
+            "dpi": data.get("dpi", 600),
+            "nice_threshold": Model.NICE_THRESHOLD,
+            "provenance": data.get("provenance", {}),
         }
-        for key in ("scores", "measurements", "nice_threshold", "pipeline", "provenance", "dpi"):
-            if key in data:
-                meta[key] = data[key]
-        with open(data["path"] + "_contours.json", "w") as f:
-            json.dump(meta, f)
+        if "original_annotations" in data:
+            meta["original_annotations"] = data["original_annotations"]
+        if len(meta["scores"]) != len(meta["contours"]) or len(meta["measurements"]) != len(meta["contours"]):
+            raise ValueError("Contours, scores and measurement records must stay aligned")
+        path = data["path"] + "_contours.json"
+        if os.path.exists(path) and not os.path.exists(path+".legacy.bak"):
+            try:
+                with open(path) as handle:
+                    previous = json.load(handle)
+                if previous.get("pipeline") != Model.PIPELINE_ID:
+                    shutil.copy2(path, path+".legacy.bak")
+            except (ValueError, OSError):
+                shutil.copy2(path, path+".legacy.bak")
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile("w", dir=os.path.dirname(os.path.abspath(path)), delete=False) as handle:
+                temporary = handle.name
+                json.dump(meta, handle, allow_nan=False)
+            os.replace(temporary, path)
+        finally:
+            if temporary and os.path.exists(temporary):
+                os.unlink(temporary)
 
     @staticmethod
     def draw_prediction_scores(img, contours, scores, group_selected_indices, effective_scale):

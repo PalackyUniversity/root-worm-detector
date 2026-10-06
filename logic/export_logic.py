@@ -2,20 +2,57 @@ from scipy.stats import skew, kurtosis
 import pandas as pd
 import numpy as np
 import cv2
+from pathlib import Path
 
 class ExportLogic:
     @classmethod
     def export_data(cls, file_path, selections, image_data):
         export_list = [cls.build_row(d, selections) for d in image_data]
         df = pd.DataFrame(export_list)
+        females = pd.DataFrame([row for data in image_data for row in cls.female_rows(data)])
         if file_path.endswith(".csv"):
             df.to_csv(file_path, index=False)
+            if selections.get("individual"):
+                path = Path(file_path)
+                females.to_csv(path.with_name(path.stem+"_females.csv"), index=False)
         else:
-            df.to_excel(file_path, index=False)
+            with pd.ExcelWriter(file_path) as writer:
+                df.to_excel(writer, sheet_name="Images", index=False)
+                if selections.get("individual"):
+                    females.to_excel(writer, sheet_name="Females", index=False)
+
+    @staticmethod
+    def female_rows(data):
+        rows = []
+        for record in data.get("measurements", []):
+            rows.append({"Image File": data["path"], "Detection Index": record.get("det_index"),
+                         "DPI": data.get("dpi"), "Status": record.get("status"),
+                         "Detector Confidence": record.get("detector_score"), "Nice": record.get("nice"),
+                         "Nice Probability": record.get("nice_probability"),
+                         "Model Nice": record.get("model_nice", record.get("nice")),
+                         "Manual Nice Override": record.get("nice_override"),
+                         "Nice Threshold": data.get("nice_threshold", .3), "Area (mm²)": record.get("area_mm2"),
+                         "X": record.get("x"), "Y": record.get("y"), "Pipeline": data.get("pipeline"),
+                         **record.get("features", {})})
+        return rows
 
     @classmethod
     def build_row(cls, data, selections):
         row = {"Image File": data["path"]}
+        if selections.get("nice", True) and "measurements" in data:
+            records = data["measurements"]
+            nice_areas = [record["area_mm2"] for record in records
+                          if record.get("nice") is True and record.get("area_mm2") is not None]
+            row.update({"DPI": data.get("dpi"), "Nice Count": sum(record.get("nice") is True for record in records),
+                        "Nice Area Count": len(nice_areas),
+                        "Classified Count": sum(record.get("nice") is not None for record in records),
+                        "Model-Classified Count": sum(record.get("status") == "classified"
+                                                      or record.get("nice_probability") is not None
+                                                      for record in records),
+                        "Unclassified Count": sum(record.get("nice") is None for record in records),
+                        "Total Nice Area (mm²)": float(np.sum(nice_areas)),
+                        "Mean Nice Area (mm²)": float(np.mean(nice_areas)) if nice_areas else None,
+                        "Median Nice Area (mm²)": float(np.median(nice_areas)) if nice_areas else None})
         areas = cls.get_contour_areas(data)
         if selections.get("count"):
             row["Contour Count"] = len(areas)
