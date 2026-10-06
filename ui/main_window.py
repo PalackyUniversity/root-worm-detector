@@ -1,14 +1,15 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
                                QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
                                QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar)
-from PySide6.QtGui import QImage, QPixmap, QMouseEvent, QAction, QUndoStack, QPainter, QPalette, QColor, QPen
-from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QRectF, QSize, QSignalBlocker
+from PySide6.QtGui import QMouseEvent, QAction, QUndoStack, QPainter, QPalette, QColor, QPen
+from PySide6.QtCore import Qt, QEvent, QPoint, QPointF, QRect, QRectF, QSize, QSignalBlocker
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
 from logic.image_logic import ImageLogic
 from logic.commands import AddContourCommand, RemoveContoursCommand
 from ui.draggable_image_list import DraggableImageList
 from ui.export_dialog import ExportDialog
+from ui.image_preview import ImagePreview
 from config.shortcuts import Shortcuts
 from config.strings import Strings
 from config.general import Config
@@ -35,7 +36,7 @@ class MainWindow(QMainWindow):
         self.__group_selection_rect = None
         self.__selection_press_position = None
         self.__selection_dragged = False
-        self.__zoom_factor = 1.0
+        self.__zoom_scale = None  # Fit automatically until the user zooms.
         self.__effective_scale = 1
         self.__cancel_prediction = False
         self.__cross_preview_mode = False
@@ -120,7 +121,8 @@ class MainWindow(QMainWindow):
         self.label_zoom = QLabel("100%")
 
         # Preview image label
-        self.label_image = QLabel(Strings.IMAGE_PREVIEW)
+        self.label_image = ImagePreview(Strings.IMAGE_PREVIEW)
+        self.label_image.setToolTip(Strings.PREVIEW_NAVIGATION_TOOLTIP)
         self.label_image.setAlignment(Qt.AlignCenter)
         self.label_image.setContextMenuPolicy(Qt.CustomContextMenu)
         self.label_image.customContextMenuRequested.connect(self.show_preview_context_menu)
@@ -141,7 +143,10 @@ class MainWindow(QMainWindow):
         # Image panel
         self.panel_image = QScrollArea()
         self.panel_image.setWidget(self.label_image)
-        self.panel_image.setWidgetResizable(True)
+        self.panel_image.setWidgetResizable(False)
+        self.panel_image.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.panel_image.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOn)
+        self.panel_image.viewport().installEventFilter(self)
         self.panel_image.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.panel_image.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
@@ -525,7 +530,7 @@ class MainWindow(QMainWindow):
         self.update_preview()
 
     def _release_preview(self):
-        self.label_image.clear()
+        self.label_image.clear_image(Strings.IMAGE_PREVIEW)
         if self._preview_data is not None:
             self._preview_data["image"] = None
         self._preview_data = None
@@ -537,7 +542,7 @@ class MainWindow(QMainWindow):
         self.panel_image.setVerticalScrollBarPolicy(scroll_policy)
         if self.__current_index < 0 or self.__current_index >= len(self.__image_data):
             self._release_preview()
-            self.label_image.setText(Strings.IMAGE_PREVIEW)
+            self.label_image.resize(self.panel_image.viewport().size())
             return
 
         data = self.__image_data[self.__current_index]
@@ -550,91 +555,66 @@ class MainWindow(QMainWindow):
             except (OSError, ValueError, cv2.error):
                 data["load_error"] = Strings.IMAGE_LOAD_ERROR_MESSAGE.format(file_path=data["path"])
         if data.get("load_error"):
-            self.label_image.setText(data["load_error"])
+            self.label_image.clear_image(data["load_error"])
+            self.label_image.resize(self.panel_image.viewport().size())
             return
-        img = ImageLogic.draw_annotations(
-            data,
-            self.__cross_preview_mode,
-            self.__group_selected_indices,
-            self.__effective_scale,
-            self._show_contours  # Pass show_contours flag to draw_annotations
-        )
-
-        # If drawing
-        if self.__drawing:
-            ImageLogic.draw_contour(
-                img,
-                self.__current_contour,
-                (255, 100, 0),  # TODO color
-                self.__effective_scale
-            )
-
-        # Draw prediction scores with dynamic scaling and color based on selection
-        if (
-            self._show_confidences and
-            "contours" in data and "scores" in data
-        ):
-            ImageLogic.draw_prediction_scores(
-                img,
-                data["contours"],
-                data["scores"],
-                self.__group_selected_indices,
-                self.__effective_scale
-            )
-
-        # Render the image
-        h, w, _ = img.shape
-        pixmap = QPixmap.fromImage(QImage(img.data, w, h, 3 * w, QImage.Format_BGR888))
-
-        w_available = self.panel_image.viewport().width()
-        h_available = self.panel_image.viewport().height()
-        base_scale = min(w_available / w, h_available / h, 1.0)
-        self.__effective_scale = base_scale * self.__zoom_factor
-
-        scaled = pixmap.scaled(
-            pixmap.width() * self.__effective_scale,
-            pixmap.height() * self.__effective_scale,
-            Qt.KeepAspectRatio,
-            Qt.FastTransformation
-        )
-        if self.__group_select_active and self.__group_selection_rect is not None:
-            selection = self.__group_selection_rect
-            rect = QRectF(selection.x() * self.__effective_scale,
-                          selection.y() * self.__effective_scale,
-                          selection.width() * self.__effective_scale,
-                          selection.height() * self.__effective_scale)
-            painter = QPainter(scaled)
-            painter.setRenderHint(QPainter.Antialiasing)
-            accent = self.palette().color(QPalette.Highlight)
-            fill = QColor(accent)
-            fill.setAlpha(35)
-            painter.setPen(QPen(QColor(255, 255, 255, 180), 3))
-            painter.setBrush(fill)
-            painter.drawRoundedRect(rect, 2, 2)
-            painter.setPen(QPen(accent, 1.5))
-            painter.setBrush(Qt.NoBrush)
-            painter.drawRoundedRect(rect, 2, 2)
-            painter.end()
-        self.label_image.setPixmap(scaled)
-        self.label_image.resize(scaled.size())
+        preview = self.label_image
+        changed = preview.set_data(data)
+        preview.selected = set(self.__group_selected_indices)
+        preview.crosses = self.__cross_preview_mode
+        preview.show_contours = self._show_contours
+        preview.show_scores = self._show_confidences
+        preview.drawing = self.__current_contour if self.__drawing else []
+        preview.selection_rect = self.__group_selection_rect if self.__group_select_active else None
+        viewport = self.panel_image.viewport()
+        h, w = data['image'].shape[:2]
+        base_scale = min(viewport.width() / w, viewport.height() / h, 1.0)
+        self.__effective_scale = base_scale if self.__zoom_scale is None else self.__zoom_scale
+        preview.set_view(self.__effective_scale, viewport.size())
+        if changed:
+            center = preview.widget_point(QPointF(w / 2, h / 2))
+            self.panel_image.horizontalScrollBar().setValue(round(center.x() - viewport.width() / 2))
+            self.panel_image.verticalScrollBar().setValue(round(center.y() - viewport.height() / 2))
         self.label_zoom.setText(f"{self.__effective_scale * 100:.0f}%")
 
-    def zoom(self, zoom_factor):
+    def zoom(self, scale, anchor=None):
+        if self.label_image.data is None:
+            return
+        viewport = self.panel_image.viewport()
+        if anchor is None:
+            anchor = QPointF(viewport.width() / 2, viewport.height() / 2)
         h_bar = self.panel_image.horizontalScrollBar()
         v_bar = self.panel_image.verticalScrollBar()
-        factor = zoom_factor / self.__zoom_factor
-
-        self.__zoom_factor = zoom_factor
+        before = self.label_image.image_point(anchor + QPointF(h_bar.value(), v_bar.value()))
+        # Limits are image magnification, not multiples of fit-to-window.
+        self.__zoom_scale = min(Config.MAX_ZOOM_FACTOR, max(Config.MIN_ZOOM_FACTOR, scale))
         self.update_preview()
+        after = self.label_image.widget_point(before)
+        h_bar.setValue(round(after.x() - anchor.x()))
+        v_bar.setValue(round(after.y() - anchor.y()))
 
-        h_bar.setValue(factor * h_bar.value() + self.panel_image.viewport().width() / 2 * (factor - 1))
-        v_bar.setValue(factor * v_bar.value() + self.panel_image.viewport().height() / 2 * (factor - 1))
+    def eventFilter(self, watched, event):
+        if watched is self.panel_image.viewport() and event.type() == QEvent.Resize:
+            h_bar = self.panel_image.horizontalScrollBar()
+            v_bar = self.panel_image.verticalScrollBar()
+            center = None
+            if self.label_image.data is not None and event.oldSize().isValid():
+                center = self.label_image.image_point(QPointF(
+                    h_bar.value() + event.oldSize().width() / 2,
+                    v_bar.value() + event.oldSize().height() / 2))
+            self.update_preview()
+            if center is not None:
+                position = self.label_image.widget_point(center)
+                h_bar.setValue(round(position.x() - event.size().width() / 2))
+                v_bar.setValue(round(position.y() - event.size().height() / 2))
+        return super().eventFilter(watched, event)
+
 
     def zoom_step_in(self):
-        self.zoom(min(self.__zoom_factor * 1.2, Config.MAX_ZOOM_FACTOR))
+        self.zoom(self.__effective_scale * 1.2)
 
     def zoom_step_out(self):
-        self.zoom(max(self.__zoom_factor * 0.8, 0.1))
+        self.zoom(self.__effective_scale / 1.2)
 
     def prediction_enable_controls(self, enable):
         self.panel_image_list.setEnabled(enable)
@@ -722,6 +702,9 @@ class MainWindow(QMainWindow):
 
         # If in contour drawing mode, record the point and update the preview.
         elif self.__drawing:
+            h, w = self.__image_data[self.__current_index]["image"].shape[:2]
+            if not (0 <= pt.x() < w and 0 <= pt.y() < h):
+                return
             self.__current_contour.append((pt.x(), pt.y()))
             self.update_preview()
             return
@@ -767,8 +750,10 @@ class MainWindow(QMainWindow):
             self.update_preview()
             return
 
-        if self.__drawing:
+        if self.__drawing and self.__current_contour:
             pt = self.get_image_coordinates(event)
+            h, w = self.__image_data[self.__current_index]["image"].shape[:2]
+            pt = QPoint(min(w - 1, max(0, pt.x())), min(h - 1, max(0, pt.y())))
             self.__current_contour.append((pt.x(), pt.y()))
             self.update_preview()
 
@@ -820,7 +805,7 @@ class MainWindow(QMainWindow):
             return
 
         # If in drawing mode.
-        if self.__drawing:
+        if self.__drawing and self.__current_contour:
             # Create an undo command for this operation
             command = AddContourCommand(self.__image_data[self.__current_index], self.__current_contour)
             self.__undo_stack.push(command)
@@ -830,24 +815,9 @@ class MainWindow(QMainWindow):
             self.update_preview()
 
     def get_image_coordinates(self, event: QMouseEvent):
-        pixmap_scaled = self.label_image.pixmap()
-        if not pixmap_scaled or self.__current_index < 0:
+        if self.label_image.data is None:
             return QPoint(0, 0)
-
-        disp_size = pixmap_scaled.size()
-        offset_x = (self.label_image.width() - disp_size.width()) / 2
-        offset_y = (self.label_image.height() - disp_size.height()) / 2
-
-        pos = event.position() if hasattr(event, "position") else event.localPos()
-
-        orig_img = self.__image_data[self.__current_index]["image"]
-        w_original, h_original = orig_img.shape[1], orig_img.shape[0]
-
-        scale_factor = disp_size.width() / w_original
-        x = (pos.x() - offset_x) / scale_factor
-        y = (pos.y() - offset_y) / scale_factor
-
-        return QPoint(round(x), round(y))
+        return self.label_image.image_point(event.position()).toPoint()
 
     def remove_selected_contour(self):
         if self.__current_index == -1 or not self.__group_selected_indices:
@@ -916,14 +886,27 @@ class MainWindow(QMainWindow):
         super().keyPressEvent(event)
 
     def preview_wheel_event(self, event):
-        # Zoom in/out with Ctrl + mouse wheel
-        if event.modifiers() & Qt.ControlModifier:
-            delta = event.angleDelta().y()
-            if delta > 0:
-                self.zoom_step_in()
-            elif delta < 0:
-                self.zoom_step_out()
-            event.accept()
-        else:
-            # Pass event to parent for normal scrolling
-            super(QLabel, self.label_image).wheelEvent(event)
+        modifiers = event.modifiers()
+        pixels = event.pixelDelta()
+        angle = event.angleDelta()
+        if modifiers & (Qt.ShiftModifier | Qt.AltModifier):
+            # Alt takes precedence if both modifiers are held.
+            bar = (self.panel_image.horizontalScrollBar() if modifiers & Qt.AltModifier
+                   else self.panel_image.verticalScrollBar())
+            distance = pixels.y() or pixels.x()
+            if not distance:
+                distance = (angle.y() or angle.x()) / 120 * QApplication.wheelScrollLines() * bar.singleStep()
+            bar.setValue(bar.value() - round(distance))
+        elif angle.y() or pixels.y():
+            # Plain wheel and Ctrl+wheel both zoom about the pointer.
+            delta = angle.y() or pixels.y()
+            anchor = event.position() - QPointF(
+                self.panel_image.horizontalScrollBar().value(),
+                self.panel_image.verticalScrollBar().value())
+            self.zoom(self.__effective_scale * 1.2 ** (delta / 120), anchor)
+        elif pixels.x() or angle.x():
+            # Preserve native horizontal trackpad/tilt-wheel panning.
+            bar = self.panel_image.horizontalScrollBar()
+            distance = pixels.x() or angle.x() / 120 * QApplication.wheelScrollLines() * bar.singleStep()
+            bar.setValue(bar.value() - round(distance))
+        event.accept()

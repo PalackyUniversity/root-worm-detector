@@ -40,6 +40,7 @@ class Strings:
     CANCEL_PREDICTION = "Cancel Prediction"
 
     # View Menu items
+    PREVIEW_NAVIGATION_TOOLTIP = "Scroll: zoom at cursor • Shift+scroll: pan vertically • Alt+scroll: pan horizontally • Drag: pan"
     ZOOM_IN = "Zoom In"
     ZOOM_OUT = "Zoom Out"
     SHOW_CONFIDENCES = "Show Confidences"
