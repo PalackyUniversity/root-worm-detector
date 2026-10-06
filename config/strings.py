@@ -43,6 +43,8 @@ class Strings:
     IMPORT = "Import..."
     IMPORT_FILES = "Import Files"
     IMPORT_FOLDER = "Import Folder"
+    CLEAR_IMPORTS = "Clear all imports"
+    CLEAR_IMPORTS_TOOLTIP = "Remove all images from the list. Files and saved annotations stay on disk."
     EXPORT = "Export"
 
     # Edit Menu items
@@ -74,7 +76,7 @@ class Strings:
     AUTHOR = "Author:"
 
     # Context Menu items
-    CONTEXT_DELETE_IMAGE = "Delete Image"
+    CONTEXT_REMOVE_IMAGE = "Remove from list"
     CONTEXT_IMPORT_FILES = "Import Files"
     CONTEXT_IMPORT_FOLDER = "Import Folder"
     CONTEXT_CLEAR_GROUP_SELECT = "Clear Group Selection"

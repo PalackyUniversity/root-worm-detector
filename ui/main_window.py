@@ -236,6 +236,10 @@ class MainWindow(QMainWindow):
         self.menu_import_folder.setShortcuts(Shortcuts.IMPORT_FOLDER)
         self.menu_import_folder.triggered.connect(self.import_folder)
 
+        self.menu_clear_imports = QAction(Strings.CLEAR_IMPORTS, self)
+        self.menu_clear_imports.setStatusTip(Strings.CLEAR_IMPORTS_TOOLTIP)
+        self.menu_clear_imports.triggered.connect(self.clear_imports)
+
         # Menu -> File -> Export
         self.menu_export = QAction(Strings.EXPORT, self)
         self.menu_export.setShortcuts(Shortcuts.EXPORT)
@@ -343,6 +347,8 @@ class MainWindow(QMainWindow):
         menu_file_import.addAction(self.menu_import_files)
         menu_file_import.addAction(self.menu_import_folder)
         menu_file.addAction(self.menu_export)
+        menu_file.addSeparator()
+        menu_file.addAction(self.menu_clear_imports)
 
         # Menu setup - Edit
         menu_edit.addAction(self.menu_undo)
@@ -485,8 +491,8 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, Strings.DPI_SAVE_FAILED, str(error))
 
     def show_list_context_menu(self, pos: QPoint):
-        # Right click -> Delete image
-        context_remove = QAction(Strings.CONTEXT_DELETE_IMAGE, self)
+        # Right click -> Remove from list (keep the file on disk)
+        context_remove = QAction(Strings.CONTEXT_REMOVE_IMAGE, self)
         context_remove.setEnabled(self.panel_image_list.indexAt(pos).isValid())
 
         # Right click -> Import image/s
@@ -684,6 +690,22 @@ class MainWindow(QMainWindow):
             self._end_progress()
             self.update_image_list()
             self.update_controls()
+
+    def clear_imports(self):
+        if self._prediction_thread is not None or self._invalidation_thread is not None:
+            return
+        self.__image_data.clear()
+        self.__drawing = False
+        self.__current_contour = []
+        self.__group_selected_indices = []
+        self.__group_selection_start = None
+        self.__group_selection_rect = None
+        self.__selection_press_position = None
+        self.__selection_dragged = False
+        self._panning = False
+        self._pan_maybe = False
+        self.__undo_stack.clear()
+        self.update_image_list()
 
     def update_image_list(self):
         current = self.panel_image_list.currentItem()
@@ -1215,6 +1237,7 @@ class MainWindow(QMainWindow):
         busy = self._prediction_thread is not None or self._invalidation_thread is not None
         has_images = len(self.__image_data) > 0 and self.__current_index != -1
         can_edit = self._can_edit_image()
+        self.menu_clear_imports.setEnabled(not busy and bool(self.__image_data))
         self.menu_zoom_in.setEnabled(has_images)
         self.menu_zoom_out.setEnabled(has_images)
         self.button_zoom_in.setEnabled(has_images)
