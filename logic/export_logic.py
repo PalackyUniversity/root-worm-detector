@@ -38,7 +38,8 @@ class ExportLogic:
 
     @classmethod
     def build_row(cls, data, selections):
-        row = {"Image File": data["path"]}
+        row = {"Image File": data["path"], "Pipeline": data.get("pipeline"),
+               "Detector Model": data.get("model_id"), "Inference Device": data.get("provenance", {}).get("device")}
         if selections.get("nice", True) and "measurements" in data:
             records = data["measurements"]
             nice_areas = [record["area_mm2"] for record in records

@@ -16,3 +16,11 @@ class Model:
         "shape_unet_seeded.pt": "df0fa4049758f9c8ef907e68bbf62b46d87f882a494f582be8c33a6bb5b6c5ca",
         "nice_gb9_v3.pkl": "7cfa11d55445a25a85f726623ca13d8a1f4fbc292c303be350373e4400cb3774",
     }
+
+    DEFAULT_MODEL = "m"
+    DETECTORS = {
+        "s": {"filename": "v8-s-mr4.pt", "sha256": SHA256["v8-s-mr4.pt"],
+              "confidence": .35, "pipeline": PIPELINE_ID},
+        "m": {"filename": "v8-m-mr4.pt", "sha256": "bbb6bae542b07ede475e7fdaa2a4864c39edd9d25ba9486363503af27d668eed",
+              "confidence": .35, "pipeline": "v8-m-mr4-seeded-unet-gb9-nice030-v2"},
+    }

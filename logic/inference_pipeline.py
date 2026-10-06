@@ -14,21 +14,25 @@ from threadpoolctl import threadpool_limits
 from config.model import Model
 from logic import measurement
 from logic.shape_model import SeededUNet
+from logic.model_registry import model_spec
 
 
 class InferencePipeline:
-    def __init__(self, device=None):
+    def __init__(self, device=None, model_id="s", cpu_threads=4):
         self.device = str(device or ("cuda:0" if torch.cuda.is_available() else "cpu"))
-        torch.set_num_threads(4)
-        for name, expected in Model.SHA256.items():
+        self.spec = model_spec(model_id)
+        self.cpu_threads = max(1, int(cpu_threads))
+        torch.set_num_threads(self.cpu_threads)
+        self.runtime = {name: version(name) for name in ["torch", "torchvision", "ultralytics", "sahi", "opencv-python", "numpy", "scikit-learn"]}
+        for name, expected in self.spec["hashes"].items():
             path = Model.MODEL_DIR / name
             if not path.is_file():
                 raise FileNotFoundError(f"Required model is missing: {path}. Fetch the model files with Git LFS.")
             if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
                 raise ValueError(f"Model checksum mismatch: {path}")
         self.detector = AutoDetectionModel.from_pretrained(
-            model_type="ultralytics", model_path=str(Model.DETECTOR_PATH),
-            confidence_threshold=Model.MIN_OBJECT_CONFIDENCE, image_size=640, device=self.device)
+            model_type="ultralytics", model_path=str(self.spec["path"]),
+            confidence_threshold=self.spec["confidence"], image_size=640, device=self.device)
         self.shape = SeededUNet().to(self.device)
         self.shape.load_state_dict(torch.load(Model.SHAPE_PATH, map_location=self.device, weights_only=True))
         self.shape.eval()
@@ -41,11 +45,11 @@ class InferencePipeline:
     def predict(self, path):
         dpi = measurement.read_dpi(path)
         tile_size = measurement.tile_size_for_dpi(dpi)
+        detection_image, image = measurement.read_prediction_images(path)
         result = get_sliced_prediction(
-            str(path), self.detector, slice_height=tile_size, slice_width=tile_size,
+            detection_image, self.detector, slice_height=tile_size, slice_width=tile_size,
             overlap_height_ratio=.2, overlap_width_ratio=.2, postprocess_type="GREEDYNMM",
             postprocess_match_metric="IOS", force_postprocess_type=True, verbose=0)
-        image = measurement.read_image(path)
         contours, scores, records, prepared = [], [], [], []
         for index, prediction in enumerate(result.object_prediction_list):
             box = prediction.bbox
@@ -90,13 +94,13 @@ class InferencePipeline:
             inputs = np.array([[record["features"][name] for name in measurement.FEATURES] for record in classified])
             if not np.isfinite(inputs).all():
                 raise ValueError("Non-finite niceness features; no prediction was saved")
-            with threadpool_limits(limits=4):
+            with threadpool_limits(limits=self.cpu_threads):
                 probabilities = np.mean([estimator.predict_proba(inputs)[:, 1] for estimator in self.classifier["models"]], axis=0)
             for record, probability in zip(classified, probabilities):
                 record.update(nice_probability=float(probability), nice=bool(probability >= Model.NICE_THRESHOLD))
         return dict(contours=contours, scores=scores, measurements=records, dpi=dpi,
-                    pipeline=Model.PIPELINE_ID, predicted=True, nice_threshold=Model.NICE_THRESHOLD,
-                    provenance=dict(models=Model.SHA256, confidence=Model.MIN_OBJECT_CONFIDENCE,
+                    pipeline=self.spec["pipeline"], model_id=self.spec["model_id"], predicted=True, nice_threshold=Model.NICE_THRESHOLD,
+                    provenance=dict(models=self.spec["hashes"], model_id=self.spec["model_id"], confidence=self.spec["confidence"],
                                     nice_threshold=Model.NICE_THRESHOLD, device=self.device,
                                     tile_size=tile_size, overlap=.2, mask_threshold=.5,
-                                    runtime={name: version(name) for name in ["torch", "torchvision", "ultralytics", "sahi", "opencv-python", "numpy", "scikit-learn"]}))
+                                    runtime=self.runtime))

@@ -10,12 +10,12 @@ class PredictionLogic:
     _pipelines = {}
 
     @classmethod
-    def predict_image(cls, file_path, device=None):
+    def predict_image(cls, file_path, device=None, model_id="s", cpu_threads=4):
         from logic.inference_pipeline import InferencePipeline
 
-        key = str(device or "auto")
+        key = (str(device or "auto"), model_id, cpu_threads)
         if key not in cls._pipelines:
-            cls._pipelines[key] = InferencePipeline(device)
+            cls._pipelines[key] = InferencePipeline(device, model_id=model_id, cpu_threads=cpu_threads)
         return cls._pipelines[key].predict(file_path)
 
     @staticmethod

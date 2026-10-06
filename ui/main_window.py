@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
                                QSplitter, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
-                               QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar)
+                               QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar, QComboBox)
 from PySide6.QtGui import QMouseEvent, QAction, QUndoStack
 from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QEvent, QSize, QSignalBlocker
 from logic.prediction_logic import PredictionLogic
@@ -11,7 +11,9 @@ from ui.draggable_image_list import DraggableImageList
 from ui.export_dialog import ExportDialog
 from ui.contour_properties_dialog import ContourPropertiesDialog
 from ui.image_preview import ImagePreview
-from ui.prediction_worker import PredictionWorker
+from ui.prediction_worker import BatchPredictionWorker
+from logic.adaptive_prediction import AdaptivePredictor
+from config.model import Model
 from config.shortcuts import Shortcuts
 from config.strings import Strings
 from config.general import Config
@@ -43,6 +45,8 @@ class MainWindow(QMainWindow):
         self.__cancel_prediction = False
         self._prediction_thread = None
         self._prediction_pending = []
+        self._predictor = AdaptivePredictor()
+        QApplication.instance().aboutToQuit.connect(self._shutdown_prediction)
         self._close_after_prediction = False
         self.__cross_preview_mode = False
         self._show_confidences = True  # Add this line to store toggle state
@@ -94,6 +98,14 @@ class MainWindow(QMainWindow):
         self.button_pan.setCheckable(True)
         self.button_pan.setChecked(True)
         self.button_pan.clicked.connect(self.start_panning)
+
+        self.model_selector = QComboBox()
+        self.model_selector.addItem(Strings.DETECTOR_M, "m")
+        self.model_selector.addItem(Strings.DETECTOR_S, "s")
+        self.model_selector.setCurrentIndex(self.model_selector.findData(Model.DEFAULT_MODEL))
+        self.model_selector.setToolTip(Strings.DETECTOR_TOOLTIP)
+        self.model_selector.setAccessibleName(Strings.DETECTOR_LABEL)
+        self.execution_status = QLabel()
 
         # Predict button
         self.button_predict = QPushButton(Strings.PREDICT)
@@ -198,6 +210,8 @@ class MainWindow(QMainWindow):
         status_bar.addWidget(self.button_zoom_out)
         status_bar.addWidget(self.button_zoom_in)
         status_bar.addWidget(self.label_zoom)
+        status_bar.addPermanentWidget(self.execution_status)
+        status_bar.addPermanentWidget(self.model_selector)
         status_bar.addWidget(self.label_measurements)
         status_bar.addWidget(QWidget(), 1)
         status_bar.addPermanentWidget(self.label_time_remaining)
@@ -254,6 +268,8 @@ class MainWindow(QMainWindow):
 
         # Menu -> Model -> Start prediction
         self.menu_start_prediction = QAction(Strings.START_PREDICTION, self)
+        self.menu_repredict = QAction(Strings.REPREDICT, self)
+        self.menu_repredict.triggered.connect(self.repredict_current)
         self.menu_start_prediction.setShortcuts(Shortcuts.PREDICTION_START)
         self.menu_start_prediction.triggered.connect(self.start_prediction)
 
@@ -323,6 +339,7 @@ class MainWindow(QMainWindow):
 
         # Menu setup - Model
         menu_model.addAction(self.menu_start_prediction)
+        menu_model.addAction(self.menu_repredict)
         menu_model.addAction(self.menu_cancel_prediction)
 
         # Menu setup - View
@@ -740,52 +757,77 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(not enable)
 
     def start_prediction(self):
-        if self._prediction_thread is not None:
+        self._start_prediction_batch([data for data in self.__image_data if not data.get("predicted", False)])
+
+    def repredict_current(self):
+        if self._prediction_thread is not None or not 0 <= self.__current_index < len(self.__image_data):
             return
-        self._prediction_pending = [data for data in self.__image_data if not data.get("predicted", False)]
-        if not self._prediction_pending:
+        if QMessageBox.question(self, Strings.REPREDICT, Strings.REPREDICT_CONFIRM) != QMessageBox.Yes:
+            return
+        self._start_prediction_batch([self.__image_data[self.__current_index]], replace=True)
+
+    def _start_prediction_batch(self, records, replace=False):
+        if self._prediction_thread is not None or not records:
             return
         self.__cancel_prediction = False
-        self._prediction_total = len(self._prediction_pending)
+        self._prediction_pending = records
+        self._prediction_by_path = {data["path"]: data for data in records}
+        self._prediction_total = len(self._prediction_by_path)
         self._prediction_completed = 0
-        self._start_next_prediction()
-        self._begin_progress(process_events=False)
-
-    def _start_next_prediction(self):
-        self._prediction_data = self._prediction_pending.pop(0)
-        self._prediction_data["processing"] = True
-        worker = PredictionWorker(self._prediction_data["path"], self)
+        for data in records:
+            data["_prediction_queued"] = True
+        worker = BatchPredictionWorker(list(self._prediction_by_path), self.model_selector.currentData(),
+                                       self._predictor, self, replace=replace)
         self._prediction_thread = worker
+        worker.image_started.connect(self._prediction_started)
+        worker.image_ready.connect(self._prediction_result)
+        worker.status_changed.connect(self._prediction_status)
         worker.finished.connect(self._prediction_finished)
+        self.model_selector.setEnabled(False)
         self.prediction_enable_controls(False)
         self.update_controls()
         self.update_image_list()
+        self._begin_progress(process_events=False)
         worker.start()
+
+    def _prediction_status(self, device, workers, fallback):
+        template = Strings.CPU_FALLBACK_STATUS if fallback else Strings.EXECUTION_STATUS
+        self.execution_status.setText(template.format(device=device.upper(), workers=workers))
+
+    def _prediction_started(self, path):
+        self._prediction_by_path[path]["processing"] = True
+        self.update_image_list()
+        self.update_controls()
+
+    def _prediction_result(self, path, result):
+        data = self._prediction_by_path[path]
+        data["processing"] = False
+        data.pop("_prediction_queued", None)
+        self.__undo_stack.clear()
+        self.__group_selected_indices = []
+        data.pop("original_annotations", None)
+        data.update(result)
+        data["predicted"] = True
+        self._prediction_completed += 1
+
+        self.update_image_list()
+        self.update_preview()
+        self.update_controls()
+        self._update_progress(self._prediction_completed, self._prediction_total, process_events=False)
 
     def _prediction_finished(self):
         worker = self._prediction_thread
-        data = self._prediction_data
-        data["processing"] = False
-        if worker.result is not None:
-            self.__undo_stack.clear()
-            self.__group_selected_indices = []
-            data.pop("original_annotations", None)
-            data.update(worker.result)
-            data["predicted"] = True
-            self._prediction_completed += 1
         error = worker.error
+        for data in self._prediction_pending:
+            data["processing"] = False
+            data.pop("_prediction_queued", None)
         worker.deleteLater()
-        # Keep the busy guard until result handling and progress updates finish.
-        self.update_image_list()
-        self.update_preview()
-        self._update_progress(self._prediction_completed, self._prediction_total, process_events=False)
         self._prediction_thread = None
-        if error is None and not self.__cancel_prediction and self._prediction_pending:
-            self._start_next_prediction()
-            return
         self._prediction_pending = []
+        self.model_selector.setEnabled(True)
         self._end_progress()
         self.prediction_enable_controls(True)
+        self.update_image_list()
         self.update_controls()
         if error is not None:
             QMessageBox.critical(self, Strings.PREDICTION_FAILED, error)
@@ -794,6 +836,14 @@ class MainWindow(QMainWindow):
 
     def cancel_prediction_process(self):
         self.__cancel_prediction = True
+        if self._prediction_thread is not None:
+            self._prediction_thread.cancel()
+
+    def _shutdown_prediction(self):
+        if self._prediction_thread is not None:
+            self._prediction_thread.cancel()
+            self._prediction_thread.wait()
+        self._predictor.close()
 
     def closeEvent(self, event):
         if self._prediction_thread is not None:
@@ -801,6 +851,7 @@ class MainWindow(QMainWindow):
             self.cancel_prediction_process()
             event.ignore()
             return
+        self._predictor.close()
         super().closeEvent(event)
 
     def start_drawing(self):
@@ -1015,6 +1066,7 @@ class MainWindow(QMainWindow):
         self.button_zoom_out.setEnabled(has_images)
 
         self.button_predict.setEnabled(not busy and any(not d.get("predicted", False) for d in self.__image_data))
+        self.menu_repredict.setEnabled(not busy and 0 <= self.__current_index < len(self.__image_data))
         self.menu_start_prediction.setEnabled(not busy and any(not d.get("predicted", False) for d in self.__image_data))
         self.menu_export.setEnabled(can_edit and all(d.get("predicted", False) for d in self.__image_data))
 

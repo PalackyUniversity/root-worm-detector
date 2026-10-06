@@ -120,3 +120,12 @@ def describe(bgr, mask):
                 weak_edge_fraction=float(weak.mean()), value=float(value[inside].mean()),
                 saturation=float(saturation[inside].mean()), value_std=float(value[inside].std()),
                 contrast=float(value[inside].mean()-value[ring].mean()))
+
+
+def read_prediction_images(path):
+    """Share decoded pixels only when SAHI and refiner orientation rules agree."""
+    with Image.open(path) as handle:
+        if handle.getexif().get(274, 1) != 1:
+            return str(path), read_image(path)
+        rgb = handle.convert('RGB')
+    return rgb, cv2.cvtColor(np.array(rgb), cv2.COLOR_RGB2BGR)

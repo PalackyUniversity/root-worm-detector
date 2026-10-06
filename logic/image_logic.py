@@ -11,6 +11,7 @@ import tempfile
 from config.model import Model
 from config.strings import Strings
 from logic import measurement
+from logic.model_registry import model_for_pipeline, model_spec, compatible_sidecar
 
 
 class ImageLogic:
@@ -33,12 +34,13 @@ class ImageLogic:
                 with open(json_path, "r") as fp:
                     meta = json.load(fp)
                 if (int(meta.get("model_version", 0)) == Model.CURRENT_MODEL_VERSION
-                        and meta.get("pipeline") == Model.PIPELINE_ID
+                        and compatible_sidecar(meta)
                         and len(meta.get("scores", [])) == len(meta.get("contours", []))
                         and len(meta.get("measurements", [])) == len(meta.get("contours", []))):
-                    for key in ("scores", "measurements", "dpi", "pipeline", "nice_threshold", "provenance", "predicted", "original_annotations"):
+                    for key in ("scores", "measurements", "dpi", "pipeline", "nice_threshold", "provenance", "predicted", "original_annotations", "model_id"):
                         if key in meta:
                             data[key] = meta[key]
+                    data["model_id"] = model_for_pipeline(meta.get("pipeline"))
                     data["contours"] = [np.array(contour, dtype=np.int32) for contour in meta["contours"]]
             except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
                 pass
@@ -220,6 +222,11 @@ class ImageLogic:
 
     @staticmethod
     def save_image_data(data):
+        identity = model_for_pipeline(data.get("pipeline", Model.PIPELINE_ID))
+        provenance = data.get("provenance", {})
+        if identity and not provenance:
+            spec = model_spec(identity)
+            provenance = dict(models=spec["hashes"], confidence=spec["confidence"], model_id=identity)
         meta = {
             "prediction_time": datetime.now().isoformat(),
             "model_version": Model.CURRENT_MODEL_VERSION,
@@ -227,10 +234,11 @@ class ImageLogic:
             "scores": data.get("scores", []),
             "measurements": data.get("measurements", []),
             "pipeline": data.get("pipeline", Model.PIPELINE_ID),
+            "model_id": model_for_pipeline(data.get("pipeline", Model.PIPELINE_ID)),
             "predicted": bool(data.get("predicted", False)),
             "dpi": data.get("dpi", 600),
             "nice_threshold": Model.NICE_THRESHOLD,
-            "provenance": data.get("provenance", {}),
+            "provenance": provenance,
         }
         if "original_annotations" in data:
             meta["original_annotations"] = data["original_annotations"]
@@ -241,7 +249,7 @@ class ImageLogic:
             try:
                 with open(path) as handle:
                     previous = json.load(handle)
-                if previous.get("pipeline") != Model.PIPELINE_ID:
+                if not compatible_sidecar(previous):
                     shutil.copy2(path, path+".legacy.bak")
             except (ValueError, OSError):
                 shutil.copy2(path, path+".legacy.bak")

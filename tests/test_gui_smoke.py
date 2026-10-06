@@ -13,6 +13,12 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class GuiSmokeTests(unittest.TestCase):
+    def setUp(self):
+        from prediction_helpers import InProcessPredictor
+        backend = patch("ui.main_window.AdaptivePredictor", InProcessPredictor)
+        backend.start()
+        self.addCleanup(backend.stop)
+
     def test_prediction_replaces_manual_data_without_stale_undo(self):
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
         import numpy as np

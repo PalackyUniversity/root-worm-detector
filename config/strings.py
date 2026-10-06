@@ -107,3 +107,12 @@ class Strings:
     ALREADY_IMPORTED_TITLE = "Already Imported"
     ALREADY_IMPORTED_MESSAGE = "Some files are already imported and were skipped."
     IMAGE_LOAD_ERROR_MESSAGE = "Failed to load image: {file_path}"
+
+    DETECTOR_LABEL = "Detector"
+    DETECTOR_M = "M — medium (default)"
+    DETECTOR_S = "S — small, faster"
+    DETECTOR_TOOLTIP = "Choose the detector for new predictions. Existing annotations keep their original model."
+    REPREDICT = "Re-predict current image…"
+    REPREDICT_CONFIRM = "Replace this image's annotations using the selected detector? A backup of the saved annotations will be kept."
+    EXECUTION_STATUS = "{device} · {workers} image worker(s)"
+    CPU_FALLBACK_STATUS = "CPU fallback · {workers} image worker(s)"

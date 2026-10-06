@@ -15,6 +15,12 @@ from ui.main_window import MainWindow
 
 
 class PredictionResponsivenessTests(unittest.TestCase):
+    def setUp(self):
+        from prediction_helpers import InProcessPredictor
+        backend = patch("ui.main_window.AdaptivePredictor", InProcessPredictor)
+        backend.start()
+        self.addCleanup(backend.stop)
+
     @classmethod
     def setUpClass(cls):
         cls.app = QApplication.instance() or QApplication([])
