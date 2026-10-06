@@ -719,8 +719,20 @@ class MainWindow(QMainWindow):
         self.update_preview()
 
     def preview_mouse_press(self, event: QMouseEvent):
-        if (self._preview_data is None or self._preview_data.get("image") is None
-                or event.button() != Qt.LeftButton):
+        if self.label_image.data is None or event.button() != Qt.LeftButton:
+            return
+
+        # Alt temporarily pans in selection mode without changing the tool.
+        if self.button_pan.isChecked() or (
+                self.__group_select_active and event.modifiers() & Qt.AltModifier):
+            self._pan_maybe = True
+            self._pan_select_click = self.button_pan.isChecked() and not (
+                event.modifiers() & ~(Qt.ControlModifier | Qt.ShiftModifier))
+            self._pan_start_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
+            self._pan_start_scroll = (
+                self.panel_image.horizontalScrollBar().value(),
+                self.panel_image.verticalScrollBar().value()
+            )
             return
 
         pt = self.get_image_coordinates(event)
@@ -741,16 +753,9 @@ class MainWindow(QMainWindow):
             self.update_preview()
             return
 
-        # Pan mode only moves the viewport; selection belongs to its own tool.
-        if self.button_pan.isChecked():
-            self._pan_maybe = True
-            self._pan_start_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
-            self._pan_start_scroll = (
-                self.panel_image.horizontalScrollBar().value(),
-                self.panel_image.verticalScrollBar().value()
-            )
-
     def preview_mouse_move(self, event: QMouseEvent):
+        if self.label_image.data is None:
+            return
         # Only start panning if mouse is held and moved enough
         if self._pan_maybe and self._pan_start_pos is not None:
             current_pos = event.globalPosition().toPoint() if hasattr(event, "globalPosition") else event.globalPos()
@@ -790,13 +795,35 @@ class MainWindow(QMainWindow):
             self.update_preview()
 
     def preview_mouse_release(self, event: QMouseEvent):
+        if self.label_image.data is None:
+            return
         # End panning logic
         if self._panning or self._pan_maybe:
+            if event.button() != Qt.LeftButton:
+                return
+            position = event.globalPosition().toPoint()
+            movement = position - self._pan_start_pos
+            select_click = (self._pan_select_click and not self._panning
+                            and abs(movement.x()) <= 2 and abs(movement.y()) <= 2
+                            and not (event.modifiers() & ~(Qt.ControlModifier | Qt.ShiftModifier)))
             self._panning = False
             self._pan_maybe = False
-            self.label_image.setCursor(Qt.OpenHandCursor)
+            self.label_image.setCursor(
+                Qt.OpenHandCursor if self.button_pan.isChecked() else Qt.CrossCursor)
             self._pan_start_pos = None
             self._pan_start_scroll = None
+            if select_click:
+                nearest = self._contour_at_position(event.position())
+                if event.modifiers() & (Qt.ControlModifier | Qt.ShiftModifier):
+                    if nearest is not None:
+                        if nearest in self.__group_selected_indices:
+                            self.__group_selected_indices.remove(nearest)
+                        else:
+                            self.__group_selected_indices.append(nearest)
+                else:
+                    self.__group_selected_indices = [] if nearest is None else [nearest]
+                self.update_preview()
+                self.update_controls()
             return
         # --- End panning logic ---
 
@@ -815,15 +842,7 @@ class MainWindow(QMainWindow):
                         self.__group_selected_indices.append(i)
             else:
                 # Use screen-space tolerance so tiny contours remain clickable at fit.
-                pt = self.get_image_coordinates(event)
-                nearest, best_distance = None, -6.0 / self.__effective_scale
-                for i, contour in enumerate(data["contours"]):
-                    distance = cv2.pointPolygonTest(contour, (pt.x(), pt.y()), True)
-                    if distance >= 0:
-                        nearest = i
-                        break
-                    if distance >= best_distance:
-                        nearest, best_distance = i, distance
+                nearest = self._contour_at_position(event.position())
                 if nearest is not None:
                     self.__group_selected_indices = [nearest]
 

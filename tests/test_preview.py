@@ -185,3 +185,48 @@ class PreviewTests(unittest.TestCase):
         self.window.resize(1400, 950)
         self.app.processEvents()
         self.assertAlmostEqual(self.window.label_image.scale, 2)
+
+    def pan_gesture(self, offsets, release_offset=QPointF(), modifiers=Qt.NoModifier,
+                    image_point=QPointF(2000, 1500)):
+        start = self.window.label_image.widget_point(image_point)
+        self.window.preview_mouse_press(QMouseEvent(QMouseEvent.MouseButtonPress,
+            start, start, Qt.LeftButton, Qt.LeftButton, modifiers))
+        for offset in offsets:
+            point = start + offset
+            self.window.preview_mouse_move(QMouseEvent(QMouseEvent.MouseMove,
+                point, point, Qt.NoButton, Qt.LeftButton, modifiers))
+        point = start + release_offset
+        self.window.preview_mouse_release(QMouseEvent(QMouseEvent.MouseButtonRelease,
+            point, point, Qt.LeftButton, Qt.NoButton, modifiers))
+
+    def test_pan_tool_click_selects_one_detection_on_release(self):
+        self.pan_gesture([QPointF(1, 1)], QPointF(1, 1))
+        self.assertEqual(self.window._MainWindow__group_selected_indices, [0])
+        self.assertTrue(self.window.button_pan.isChecked())
+        self.assertEqual(self.window.label_image.cursor().shape(), Qt.OpenHandCursor)
+
+    def test_pan_drag_never_selects_even_if_pointer_returns_to_start(self):
+        self.pan_gesture([QPointF(30, 20), QPointF()])
+        self.assertEqual(self.window._MainWindow__group_selected_indices, [])
+
+    def test_pan_release_far_from_press_without_move_event_does_not_select(self):
+        self.pan_gesture([], QPointF(4, 0))
+        self.assertEqual(self.window._MainWindow__group_selected_indices, [])
+
+    def test_pan_modified_click_toggles_object_preserving_other_selection(self):
+        self.data['contours'].append(self.data['contours'][0] + np.array([800, 0]))
+        self.data['measurements'].append(dict(nice=True))
+        self.window.update_preview()
+        for modifiers in (Qt.ControlModifier, Qt.ShiftModifier,
+                          Qt.ControlModifier | Qt.ShiftModifier):
+            with self.subTest(modifiers=modifiers):
+                self.window._MainWindow__group_selected_indices = [1]
+                self.pan_gesture([], modifiers=modifiers)
+                self.assertEqual(self.window._MainWindow__group_selected_indices, [1, 0])
+                self.pan_gesture([], modifiers=modifiers)
+                self.assertEqual(self.window._MainWindow__group_selected_indices, [1])
+                self.pan_gesture([], modifiers=modifiers, image_point=QPointF(100, 100))
+                self.assertEqual(self.window._MainWindow__group_selected_indices, [1])
+                self.pan_gesture([QPointF(30, 20), QPointF()], modifiers=modifiers)
+                self.assertEqual(self.window._MainWindow__group_selected_indices, [1])
+                self.assertTrue(self.window.button_pan.isChecked())
