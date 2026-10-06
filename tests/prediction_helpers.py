@@ -2,7 +2,7 @@
 from logic.prediction_logic import PredictionLogic
 
 class InProcessPredictor:
-    def run(self, paths, model_id, *, cancel, on_started, on_result, on_status):
+    def run(self, paths, model_id, *, cancel, on_started, on_result, on_status, dpi_by_path=None):
         for path in paths:
             if cancel.is_set():break
             on_started(path)

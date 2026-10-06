@@ -20,7 +20,7 @@ class ModelTests(unittest.TestCase):
     def test_both_models_sidecars_survive_default_change(self):
         from logic.model_registry import model_spec
         with tempfile.TemporaryDirectory() as directory:
-            path=Path(directory)/'plate.png';Image.new('RGB',(20,20)).save(path)
+            path=Path(directory)/'plate.png';Image.new('RGB',(20,20)).save(path, dpi=(600, 600))
             for name in ['s','m']:
                 spec=model_spec(name)
                 data=dict(path=str(path),contours=[],scores=[],measurements=[],predicted=True,pipeline=spec['pipeline'],model_id=name)
@@ -33,7 +33,7 @@ class ModelTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)/'a.tif'
             pixels=np.zeros((12,20,3),np.uint8);pixels[:,:,0]=130
-            Image.fromarray(pixels).save(path)
+            Image.fromarray(pixels).save(path, dpi=(600, 600))
             detection,bgr=read_prediction_images(path)
             self.assertEqual(detection.size,(20,12))
             np.testing.assert_array_equal(bgr[:,:,2],pixels[:,:,0])
@@ -46,7 +46,7 @@ class ModelTests(unittest.TestCase):
         import json
         from logic.model_registry import model_spec
         with tempfile.TemporaryDirectory() as directory:
-            path=Path(directory)/'plate.png';Image.new('RGB',(20,20)).save(path)
+            path=Path(directory)/'plate.png';Image.new('RGB',(20,20)).save(path, dpi=(600, 600))
             data=dict(path=str(path),contours=[],scores=[],measurements=[],predicted=True,pipeline=model_spec('m')['pipeline'],model_id='m')
             ImageLogic.save_image_data(data);sidecar=Path(str(path)+'_contours.json')
             original=json.loads(sidecar.read_text())

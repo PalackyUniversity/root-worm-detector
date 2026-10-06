@@ -34,7 +34,9 @@ class GuiSmokeTests(unittest.TestCase):
             path = Path(directory) / "plate.tif"
             Image.new("RGB", (40, 40)).save(path, dpi=(600, 600))
             data = ImageLogic.load_image(str(path))
-            window = MainWindow()
+            from prediction_helpers import InProcessPredictor
+            with patch("ui.main_window.AdaptivePredictor", InProcessPredictor):
+                window = MainWindow()
             window._MainWindow__image_data = [data]
             stack = window._MainWindow__undo_stack
             stack.push(AddContourCommand(data, [(10, 10)]))

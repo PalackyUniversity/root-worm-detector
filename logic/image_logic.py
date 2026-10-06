@@ -16,7 +16,7 @@ from logic.model_registry import model_for_pipeline, model_spec, compatible_side
 
 class ImageLogic:
     @staticmethod
-    def load_image(file_path, *, load_pixels=True):
+    def load_image(file_path, *, load_pixels=True, default_dpi=None):
         """Read headers and saved results; optionally defer decoding the scan."""
         data = {
             "path": file_path,
@@ -25,25 +25,33 @@ class ImageLogic:
             "scores": [],
             "measurements": [],
             "dpi": measurement.read_dpi(file_path),
+            "dpi_override": None,
             "predicted": False,
             "processing": False
         }
+        saved_dpi = None
         json_path = file_path + "_contours.json"
         if os.path.exists(json_path):
             try:
                 with open(json_path, "r") as fp:
                     meta = json.load(fp)
+                saved_dpi = measurement.valid_dpi(meta.get("dpi"))
+                data["dpi_override"] = measurement.valid_dpi(meta.get("dpi_override"))
                 if (int(meta.get("model_version", 0)) == Model.CURRENT_MODEL_VERSION
                         and compatible_sidecar(meta)
                         and len(meta.get("scores", [])) == len(meta.get("contours", []))
                         and len(meta.get("measurements", [])) == len(meta.get("contours", []))):
-                    for key in ("scores", "measurements", "dpi", "pipeline", "nice_threshold", "provenance", "predicted", "original_annotations", "model_id"):
+                    for key in ("scores", "measurements", "pipeline", "nice_threshold", "provenance", "predicted", "original_annotations", "model_id"):
                         if key in meta:
                             data[key] = meta[key]
                     data["model_id"] = model_for_pipeline(meta.get("pipeline"))
                     data["contours"] = [np.array(contour, dtype=np.int32) for contour in meta["contours"]]
             except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError):
                 pass
+        data["detected_dpi"] = data["dpi"]
+        data["dpi"] = data["dpi_override"] or data["detected_dpi"] or measurement.valid_dpi(default_dpi)
+        if data["dpi"] is None or (saved_dpi is not None and saved_dpi != data["dpi"]):
+            data["predicted"] = False
         if load_pixels:
             ImageLogic.ensure_pixels(data)
         return data
@@ -221,6 +229,17 @@ class ImageLogic:
         return len(data["contours"]) - 1  # Return the index of the newly added contour
 
     @staticmethod
+    def set_dpi_override(data, dpi, default_dpi=None):
+        if dpi is not None and measurement.valid_dpi(dpi) is None:
+            raise ValueError(Strings.DPI_INVALID)
+        updated = dict(data, dpi_override=measurement.valid_dpi(dpi))
+        updated["dpi"] = updated["dpi_override"] or updated.get("detected_dpi") or default_dpi
+        if updated["dpi"] != data.get("dpi"):
+            updated["predicted"] = False
+        ImageLogic.save_image_data(updated)
+        data.update(updated)
+
+    @staticmethod
     def save_image_data(data):
         identity = model_for_pipeline(data.get("pipeline", Model.PIPELINE_ID))
         provenance = data.get("provenance", {})
@@ -236,7 +255,8 @@ class ImageLogic:
             "pipeline": data.get("pipeline", Model.PIPELINE_ID),
             "model_id": model_for_pipeline(data.get("pipeline", Model.PIPELINE_ID)),
             "predicted": bool(data.get("predicted", False)),
-            "dpi": data.get("dpi", 600),
+            "dpi": data.get("dpi"),
+            "dpi_override": data.get("dpi_override"),
             "nice_threshold": Model.NICE_THRESHOLD,
             "provenance": provenance,
         }

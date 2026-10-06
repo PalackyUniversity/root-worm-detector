@@ -27,7 +27,7 @@ class ReclassificationTests(unittest.TestCase):
         self.directory = tempfile.TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)
         path = Path(self.directory.name) / "image.tif"
-        Image.new("RGB", (150, 150), (80, 80, 80)).save(path)
+        Image.new("RGB", (150, 150), (80, 80, 80)).save(path, dpi=(600, 600))
         self.data = ImageLogic.load_image(str(path))
         contour = np.array([[[50, 50]], [[100, 50]], [[100, 100]], [[50, 100]]], np.int32)
         self.data.update(contours=[contour, contour.copy()], scores=[.9, None], predicted=True,

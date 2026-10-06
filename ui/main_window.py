@@ -1,11 +1,12 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSizePolicy,
                                QSplitter, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
-                               QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar)
+                               QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar, QInputDialog)
 from PySide6.QtGui import QMouseEvent, QAction, QActionGroup, QUndoStack
-from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QEvent, QSize, QSignalBlocker
+from PySide6.QtCore import Qt, QPoint, QPointF, QRect, QEvent, QSize, QSignalBlocker, QSettings
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
 from logic.image_logic import ImageLogic
+from logic import measurement
 from logic.commands import AddContourCommand, RemoveContoursCommand, ReclassifyContoursCommand, ResetAnnotationsCommand
 from ui.draggable_image_list import DraggableImageList
 from ui.export_dialog import ExportDialog
@@ -25,8 +26,10 @@ from time import monotonic
 
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, settings=None):
         super().__init__()
+        self._settings = settings if settings is not None else QSettings("RootTracker", "RootTracker")
+        self._default_dpi = measurement.valid_dpi(self._settings.value("default_dpi"))
 
         # Initialize variables
         self.__image_data = []
@@ -347,6 +350,10 @@ class MainWindow(QMainWindow):
 
         # Menu setup - Model
         menu_model.addMenu(Strings.SELECT_MODEL).addActions(self.model_action_group.actions())
+        self.menu_default_dpi = QAction(self)
+        self.menu_default_dpi.triggered.connect(self.choose_default_dpi)
+        self._update_default_dpi_label()
+        menu_model.addAction(self.menu_default_dpi)
         menu_model.addSeparator()
         menu_model.addAction(self.menu_start_prediction)
         menu_model.addAction(self.menu_repredict)
@@ -377,7 +384,8 @@ class MainWindow(QMainWindow):
 
     def _can_edit_image(self, data=None):
         return (self._prediction_thread is None and self._invalidation_thread is None
-                and 0 <= self.__current_index < len(self.__image_data))
+                and 0 <= self.__current_index < len(self.__image_data)
+                and bool((data or self.__image_data[self.__current_index]).get("dpi")))
 
     def reclassify_selected(self, nice):
         if (self._prediction_thread is not None or self._invalidation_thread is not None) or self.__current_index < 0:
@@ -410,6 +418,51 @@ class MainWindow(QMainWindow):
             f"{Config.APP_TITLE}\n{Strings.AUTHOR} Tadeáš Fryčák\n{Strings.VERSION} {Config.APP_VERSION}"
         )
 
+    def _update_default_dpi_label(self):
+        self.menu_default_dpi.setText(Strings.DEFAULT_DPI.format(value=self._default_dpi or Strings.DPI_NONE))
+
+    def _resolve_dpi(self, data):
+        dpi = data.get("dpi_override") or data.get("detected_dpi") or self._default_dpi
+        if dpi != data.get("dpi"):
+            data["predicted"] = False
+        data["dpi"] = dpi
+
+    def set_default_dpi(self, dpi):
+        if self._prediction_thread is not None or self._invalidation_thread is not None:
+            return
+        if dpi is not None and measurement.valid_dpi(dpi) is None:
+            raise ValueError(Strings.DPI_INVALID)
+        self._default_dpi = measurement.valid_dpi(dpi)
+        self._settings.setValue("default_dpi", self._default_dpi or 0)
+        for data in self.__image_data:
+            self._resolve_dpi(data)
+        self._update_default_dpi_label()
+        self.update_image_list()
+
+    def choose_default_dpi(self):
+        dpi, ok = QInputDialog.getInt(self, Strings.MENU_MODEL, Strings.DEFAULT_DPI_PROMPT,
+                                     self._default_dpi or 0, 0, 100000)
+        if ok:
+            self.set_default_dpi(dpi or None)
+
+    def set_image_dpi(self, row, dpi):
+        if self._prediction_thread is not None or self._invalidation_thread is not None:
+            return
+        data = self.__image_data[row]
+        ImageLogic.set_dpi_override(data, dpi, self._default_dpi)
+        self.__undo_stack.clear()
+        self.update_image_list()
+
+    def choose_image_dpi(self, row):
+        data = self.__image_data[row]
+        dpi, ok = QInputDialog.getInt(self, Strings.SET_DPI, Strings.DPI_PROMPT,
+                                     data.get("dpi") or 0, 0, 100000)
+        if ok:
+            try:
+                self.set_image_dpi(row, dpi or None)
+            except (OSError, ValueError) as error:
+                QMessageBox.critical(self, Strings.DPI_SAVE_FAILED, str(error))
+
     def show_list_context_menu(self, pos: QPoint):
         # Right click -> Delete image
         context_remove = QAction(Strings.CONTEXT_DELETE_IMAGE, self)
@@ -426,12 +479,16 @@ class MainWindow(QMainWindow):
         # Right click - setup
         context = QMenu()
         context.addAction(context_remove)
+        context_dpi = context.addAction(Strings.SET_DPI)
+        context_dpi.setEnabled(self.panel_image_list.indexAt(pos).isValid() and self._invalidation_thread is None)
         context.addSeparator()
         context_import = context.addMenu(Strings.IMPORT)
         context_import.addAction(context_import_files)
         context_import.addAction(context_import_folder)
 
         action = context.exec(self.panel_image_list.mapToGlobal(pos))
+        if action == context_dpi:
+            self.choose_image_dpi(self.panel_image_list.indexAt(pos).row())
         if action == context_remove:
             row = self.panel_image_list.indexAt(pos).row()
             if row != -1:
@@ -586,7 +643,8 @@ class MainWindow(QMainWindow):
         try:
             for i, f in enumerate(files_to_load):
                 try:
-                    data = ImageLogic.load_image(f, load_pixels=False)
+                    data = ImageLogic.load_image(f, load_pixels=False, default_dpi=self._default_dpi)
+                    self._resolve_dpi(data)
                     self.__image_data.append(data)
                 except Exception as e:
                     QMessageBox.critical(self, Strings.IMAGE_LOAD_ERROR_TITLE, str(e))
@@ -614,6 +672,12 @@ class MainWindow(QMainWindow):
                         unknown = sum(record.get("nice") is None for record in records)
                         item.setToolTip(Strings.MEASUREMENT_FILE_TOOLTIP.format(path=data['path'], total=len(records), nice=nice_count, unknown=unknown, pipeline=data.get('pipeline', '')))
 
+                    dpi = data.get("dpi")
+                    item.setData(Qt.UserRole + 3, not bool(dpi))
+                    source = (Strings.DPI_SOURCE_OVERRIDE if data.get("dpi_override") else
+                              Strings.DPI_SOURCE_METADATA if data.get("detected_dpi") else Strings.DPI_SOURCE_DEFAULT)
+                    item.setToolTip(item.toolTip() + "\n" + (Strings.DPI_TOOLTIP.format(value=dpi, source=source)
+                                                            if dpi else Strings.DPI_MISSING))
                     item.setData(Qt.UserRole + 2, data.get("processing", False))
                     item.setData(Qt.UserRole, data.get("predicted", False) and not data.get("processing", False))
 
@@ -818,6 +882,7 @@ class MainWindow(QMainWindow):
         self._start_prediction_batch([self.__image_data[self.__current_index]], replace=True)
 
     def _start_prediction_batch(self, records, replace=False):
+        records = [data for data in records if data.get("dpi")]
         if self._prediction_thread is not None or self._invalidation_thread is not None or not records:
             return
         self.__cancel_prediction = False
@@ -828,7 +893,9 @@ class MainWindow(QMainWindow):
         for data in records:
             data["_prediction_queued"] = True
         worker = BatchPredictionWorker(list(self._prediction_by_path), self._selected_model,
-                                       self._predictor, self, replace=replace)
+                                       self._predictor, self, replace=replace,
+                                       dpi_by_path={d["path"]: d["dpi"] for d in records},
+                                       dpi_overrides={d["path"]: d.get("dpi_override") for d in records})
         self._prediction_thread = worker
         worker.image_started.connect(self._prediction_started)
         worker.image_ready.connect(self._prediction_result)
@@ -1116,15 +1183,16 @@ class MainWindow(QMainWindow):
     def update_controls(self):
         busy = self._prediction_thread is not None or self._invalidation_thread is not None
         has_images = len(self.__image_data) > 0 and self.__current_index != -1
-        can_edit = has_images and not busy
+        can_edit = self._can_edit_image()
         self.menu_zoom_in.setEnabled(has_images)
         self.menu_zoom_out.setEnabled(has_images)
         self.button_zoom_in.setEnabled(has_images)
         self.button_zoom_out.setEnabled(has_images)
 
-        self.button_predict.setEnabled(not busy and any(not d.get("predicted", False) for d in self.__image_data))
-        self.menu_repredict.setEnabled(not busy and 0 <= self.__current_index < len(self.__image_data))
-        self.menu_start_prediction.setEnabled(not busy and any(not d.get("predicted", False) for d in self.__image_data))
+        self.button_predict.setEnabled(not busy and any(d.get("dpi") and not d.get("predicted", False) for d in self.__image_data))
+        self.menu_default_dpi.setEnabled(not busy)
+        self.menu_repredict.setEnabled(not busy and has_images and bool(self.__image_data[self.__current_index].get("dpi")))
+        self.menu_start_prediction.setEnabled(not busy and any(d.get("dpi") and not d.get("predicted", False) for d in self.__image_data))
         self.menu_export.setEnabled(can_edit and all(d.get("predicted", False) for d in self.__image_data))
 
         self.button_contour_add.setEnabled(can_edit)

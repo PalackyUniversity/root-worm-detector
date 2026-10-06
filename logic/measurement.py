@@ -15,11 +15,27 @@ def read_image(path):
         return cv2.cvtColor(np.array(handle.convert("RGB")), cv2.COLOR_RGB2BGR)
 
 
+def valid_dpi(value):
+    try:
+        value = float(value)
+        return int(round(value)) if np.isfinite(value) and 1 <= value <= 100000 else None
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
 def read_dpi(path):
     with Image.open(path) as handle:
-        tags = dict(handle.tag_v2) if hasattr(handle, "tag_v2") else {}
-    value = tags.get(282)
-    return int(round(float(value))) if value else 600
+        if hasattr(handle, "tag_v2"):
+            value = handle.tag_v2.get(282)
+            unit = handle.tag_v2.get(296, 2)
+            if unit == 3:
+                try:
+                    return valid_dpi(float(value) * 2.54)
+                except (TypeError, ValueError, OverflowError):
+                    return None
+            return valid_dpi(value) if unit == 2 else None
+        values = handle.info.get("dpi")
+        return valid_dpi(values[0]) if isinstance(values, (tuple, list)) and values else None
 
 
 def tile_size_for_dpi(dpi):

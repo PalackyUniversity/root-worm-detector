@@ -19,7 +19,7 @@ class AdaptiveGuiTests(unittest.TestCase):
             paths=[]
             for name in ('a', 'b'):
                 path=Path(folder)/(name+'.png')
-                Image.new('RGB',(20,20)).save(path)
+                Image.new('RGB',(20,20)).save(path, dpi=(600, 600))
                 paths.append(str(path))
             window=MainWindow()
             try:
@@ -64,7 +64,7 @@ class AdaptiveGuiTests(unittest.TestCase):
         release=threading.Event()
         entered=threading.Event()
         threads=[];ticks=[]
-        window._MainWindow__image_data=[dict(path='slow.tif', predicted=True, contours=[], scores=[], measurements=[])]
+        window._MainWindow__image_data=[dict(path='slow.tif', dpi=600, predicted=True, contours=[], scores=[], measurements=[])]
         def slow_save(data):
             threads.append(threading.get_ident());entered.set();release.wait(.5)
         try:
@@ -105,7 +105,7 @@ class AdaptiveGuiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             paths=[]
             for name in ['a','b']:
-                path=Path(folder)/(name+'.png');Image.new('RGB',(20,20)).save(path);paths.append(str(path))
+                path=Path(folder)/(name+'.png');Image.new('RGB',(20,20)).save(path, dpi=(600, 600));paths.append(str(path))
             window=MainWindow();window._predictor=ReversePredictor();window.load_files(paths)
             try:
                 window.start_prediction()

@@ -13,7 +13,7 @@ _PIPELINE = None
 _PIPELINE_KEY = None
 
 
-def predict_job(path, model_id, device, threads):
+def predict_job(path, model_id, device, threads, dpi=None):
     """Child-process entry point. No Qt, shared model state or sidecar writes."""
     global _PIPELINE, _PIPELINE_KEY
     import cv2
@@ -38,7 +38,7 @@ def predict_job(path, model_id, device, threads):
             torch.cuda.reset_peak_memory_stats(device)
         start = time.perf_counter()
         with threadpool_limits(limits=threads):
-            result = _PIPELINE.predict(path)
+            result = _PIPELINE.predict(path, dpi=dpi) if dpi is not None else _PIPELINE.predict(path)
         peak = torch.cuda.max_memory_reserved(device)/2**20 if device.startswith('cuda') else 0
         return dict(result=result, seconds=time.perf_counter()-start, cold=cold,
                     peak_mib=peak, rss_mib=psutil.Process().memory_info().rss/2**20)
@@ -84,7 +84,7 @@ class AdaptivePredictor:
         while len(self._pools) < width:
             self._pools.append(self._factory())
 
-    def run(self, paths, model_id, *, cancel=None, on_started=None, on_result=None, on_status=None):
+    def run(self, paths, model_id, *, cancel=None, on_started=None, on_result=None, on_status=None, dpi_by_path=None):
         model_spec(model_id) # invalid models fail before starting processes
         cancel = cancel or threading.Event()
         on_started = on_started or (lambda path: None)
@@ -123,7 +123,10 @@ class AdaptivePredictor:
                     path = pending.popleft()
                     on_started(path)
                     try:
-                        future = pool.submit(predict_job, path, model_id, self.device, min(snapshot["cores"], self.cpu_threads) if self.device == "cpu" else 4)
+                        args = (path, model_id, self.device, min(snapshot["cores"], self.cpu_threads) if self.device == "cpu" else 4)
+                        if dpi_by_path is not None:
+                            args += (dpi_by_path.get(path),)
+                        future = pool.submit(predict_job, *args)
                     except BrokenProcessPool as error:
                         submission_errors.append((path, dict(error=str(error), recoverable=True)))
                         break

@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+from PIL import Image
 import cv2
 import numpy as np
 from PySide6.QtCore import QPointF
@@ -20,7 +21,7 @@ class ContourContextTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         path = str(Path(self.directory.name) / 'scan.png')
-        cv2.imwrite(path, np.zeros((100, 100, 3), np.uint8))
+        Image.new('RGB', (100, 100)).save(path, dpi=(600, 600))
         self.window = MainWindow()
         self.window.show()
         self.window.load_files([path])

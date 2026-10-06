@@ -29,7 +29,7 @@ class LazyImageTests(unittest.TestCase):
         self.paths = []
         for i in range(3):
             path = str(Path(self.directory.name) / f'{i}.png')
-            Image.new('RGB', (80, 60), (i * 40, 20, 30)).save(path)
+            Image.new('RGB', (80, 60), (i * 40, 20, 30)).save(path, dpi=(600, 600))
             self.paths.append(path)
         self.window = MainWindow()
         self.window.show()
@@ -96,7 +96,7 @@ class LazyImageTests(unittest.TestCase):
     def test_each_image_restores_its_zoom_and_pan_while_new_images_fit(self):
         from PySide6.QtCore import QPointF
         for path, size in zip(self.paths, [(1600, 1200), (900, 1800), (2400, 1000)]):
-            Image.new('RGB', size).save(path)
+            Image.new('RGB', size).save(path, dpi=(600, 600))
         self.window.load_files(self.paths)
         view = self.window.panel_image.viewport()
         h = self.window.panel_image.horizontalScrollBar()

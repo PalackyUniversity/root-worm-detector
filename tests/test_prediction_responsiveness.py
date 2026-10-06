@@ -30,7 +30,7 @@ class PredictionResponsivenessTests(unittest.TestCase):
             records = []
             for name in ('a.png', 'b.png'):
                 path = Path(directory) / name
-                Image.new('RGB', (40, 40)).save(path)
+                Image.new('RGB', (40, 40)).save(path, dpi=(600, 600))
                 records.append(ImageLogic.load_image(str(path)))
             window = MainWindow()
             window._MainWindow__image_data = records
@@ -76,7 +76,7 @@ class PredictionResponsivenessTests(unittest.TestCase):
     def test_failure_restores_controls_and_allows_retry(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'plate.png'
-            Image.new('RGB', (40, 40)).save(path)
+            Image.new('RGB', (40, 40)).save(path, dpi=(600, 600))
             data = ImageLogic.load_image(str(path))
             window = MainWindow()
             window._MainWindow__image_data = [data]
@@ -99,7 +99,7 @@ class PredictionResponsivenessTests(unittest.TestCase):
     def test_close_during_prediction_defers_shutdown_until_worker_finishes(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'plate.png'
-            Image.new('RGB', (40, 40)).save(path)
+            Image.new('RGB', (40, 40)).save(path, dpi=(600, 600))
             window = MainWindow()
             window._MainWindow__image_data = [ImageLogic.load_image(str(path))]
             window.show()
@@ -127,7 +127,7 @@ class PredictionResponsivenessTests(unittest.TestCase):
         from PySide6.QtGui import QMouseEvent
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'plate.png'
-            Image.new('RGB', (1600, 1200)).save(path)
+            Image.new('RGB', (1600, 1200)).save(path, dpi=(600, 600))
             window = MainWindow()
             window.show()
             window.load_files([str(path)])

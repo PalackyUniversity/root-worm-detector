@@ -25,24 +25,31 @@ class ImageRowDelegate(QStyledItemDelegate):
         text_rect = view.style().subElementRect(QStyle.SE_ItemViewItemText, row, view)
         completed = bool(index.data(Qt.UserRole))
         processing = bool(index.data(Qt.UserRole + 2))
+        error = bool(index.data(Qt.UserRole + 3))
         tick_x = row.rect.right() - 15
-        if completed or processing:
+        if completed or processing or error:
             # Reserve the status mark's bounds plus a small text gap, accounting
             # for the padding already supplied by the item style.
             text_rect.setRight(min(text_rect.right(), tick_x - 8))
         row.text = row.fontMetrics.elidedText(
             row.text, Qt.ElideRight, max(0, text_rect.width()))
         view.style().drawControl(QStyle.CE_ItemViewItem, row, painter, view)
-        if not (completed or processing):
+        if not (completed or processing or error):
             return
         light = row.palette.color(QPalette.Base).lightness() >= 128
-        status_color = (QColor('#1766a5' if light else '#80bfff') if processing
+        status_color = (QColor('#bb2222' if light else '#ff8888') if error else QColor('#1766a5' if light else '#80bfff') if processing
                         else QColor('#237a45' if light else '#74c69d'))
         color = (row.palette.color(QPalette.HighlightedText)
                  if row.state & QStyle.State_Selected else status_color)
         painter.save()
         painter.setRenderHint(QPainter.Antialiasing)
         painter.translate(tick_x, row.rect.center().y())
+        if error:
+            painter.setPen(QPen(color, 2, Qt.SolidLine, Qt.RoundCap))
+            painter.drawLine(QPointF(0, -5), QPointF(0, 1))
+            painter.drawPoint(QPointF(0, 5))
+            painter.restore()
+            return
         if processing:
             # Paint the ellipsis to keep the same size across fonts/platforms.
             painter.setPen(Qt.NoPen)

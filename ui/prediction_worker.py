@@ -29,13 +29,15 @@ class BatchPredictionWorker(QThread):
     image_ready = Signal(str, object)
     status_changed = Signal(str, int, bool)
 
-    def __init__(self, paths, model_id, predictor, parent=None, replace=False):
+    def __init__(self, paths, model_id, predictor, parent=None, replace=False, dpi_by_path=None, dpi_overrides=None):
         super().__init__(parent)
         import threading
         self.paths = paths
         self.model_id = model_id
         self.predictor = predictor
         self.replace = replace
+        self.dpi_by_path = dpi_by_path
+        self.dpi_overrides = dpi_overrides or {}
         self.cancelled = threading.Event()
         self.error = None
 
@@ -43,6 +45,7 @@ class BatchPredictionWorker(QThread):
         self.cancelled.set()
 
     def _save_result(self, path, result):
+        result["dpi_override"] = self.dpi_overrides.get(path)
         if self.replace:
             from pathlib import Path
             import shutil
@@ -55,9 +58,10 @@ class BatchPredictionWorker(QThread):
 
     def run(self):
         try:
+            kwargs = {"dpi_by_path": self.dpi_by_path} if self.dpi_by_path is not None else {}
             self.predictor.run(self.paths, self.model_id, cancel=self.cancelled,
                                on_started=self.image_started.emit, on_result=self._save_result,
-                               on_status=self.status_changed.emit)
+                               on_status=self.status_changed.emit, **kwargs)
         except Exception as error:
             self.error = str(error)
 

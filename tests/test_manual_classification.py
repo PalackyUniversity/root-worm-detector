@@ -25,7 +25,7 @@ class ManualClassificationTests(unittest.TestCase):
     def test_added_contour_classification_survives_undo_redo_and_reload(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'plate.tif'
-            Image.new('RGB', (150, 150), (80, 80, 80)).save(path)
+            Image.new('RGB', (150, 150), (80, 80, 80)).save(path, dpi=(600, 600))
             data = ImageLogic.load_image(str(path))
             stack = QUndoStack()
             stack.push(AddContourCommand(data, [(75, 75)]))
@@ -60,7 +60,7 @@ class ManualClassificationTests(unittest.TestCase):
     def test_invalid_contour_does_not_change_annotations_or_create_sidecar(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'plate.tif'
-            Image.new('RGB', (150, 150)).save(path)
+            Image.new('RGB', (150, 150)).save(path, dpi=(600, 600))
             data = ImageLogic.load_image(str(path))
             before = ImageLogic.annotation_snapshot(data)
             with self.assertRaises(ValueError):

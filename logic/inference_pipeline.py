@@ -42,8 +42,14 @@ class InferencePipeline:
             raise ValueError("Classifier feature order does not match the deployment pipeline")
 
     @torch.no_grad()
-    def predict(self, path):
-        dpi = measurement.read_dpi(path)
+    def predict(self, path, dpi=None):
+        if dpi is None:
+            from logic.image_logic import ImageLogic
+            dpi = ImageLogic.load_image(path, load_pixels=False)["dpi"]
+        dpi = measurement.valid_dpi(dpi)
+        if dpi is None:
+            from config.strings import Strings
+            raise ValueError(Strings.DPI_MISSING)
         tile_size = measurement.tile_size_for_dpi(dpi)
         detection_image, image = measurement.read_prediction_images(path)
         result = get_sliced_prediction(
