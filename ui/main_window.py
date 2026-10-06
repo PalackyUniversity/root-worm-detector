@@ -9,6 +9,8 @@ from logic.image_logic import ImageLogic
 from logic.commands import AddContourCommand, RemoveContoursCommand
 from ui.draggable_image_list import DraggableImageList
 from ui.export_dialog import ExportDialog
+from ui.contour_properties_dialog import ContourPropertiesDialog
+from logic.contour_classification import MarkContoursCommand
 from ui.image_preview import ImagePreview
 from config.shortcuts import Shortcuts
 from config.strings import Strings
@@ -39,6 +41,7 @@ class MainWindow(QMainWindow):
         self.__zoom_scale = None  # Fit automatically until the user zooms.
         self.__effective_scale = 1
         self.__cancel_prediction = False
+        self._prediction_running = False
         self.__cross_preview_mode = False
         self._show_confidences = True  # Add this line to store toggle state
         self._show_contours = True     # Add toggle state for contours visibility
@@ -364,29 +367,58 @@ class MainWindow(QMainWindow):
                 self.update_image_list()
                 self.update_controls()
 
+    def _contour_at_position(self, pos):
+        if self.label_image.data is None:
+            return None
+        data = self.__image_data[self.__current_index]
+        point = self.label_image.image_point(QPointF(pos))
+        nearest, best_distance = None, -6.0 / self.__effective_scale
+        for index, contour in enumerate(data["contours"]):
+            distance = cv2.pointPolygonTest(contour, (point.x(), point.y()), True)
+            if distance >= 0:
+                return index
+            if distance >= best_distance:
+                nearest, best_distance = index, distance
+        return nearest
+
     def show_preview_context_menu(self, pos: QPoint):
-        # Right click -> Add contour
-        context_add_contour = QAction(Strings.ADD_CONTOUR, self)
-        context_add_contour.triggered.connect(self.start_drawing)
-
-        # Right click -> Group select
-        context_group_select = QAction(Strings.GROUP_SELECT, self)
-        context_group_select.setShortcuts(Shortcuts.CONTOUR_GROUP_SELECT)
-        context_group_select.triggered.connect(self.start_group_selection)
-
-        # Right click - setup
-        context = QMenu()
-        context.addAction(context_add_contour)
-        context.addAction(context_group_select)
-
-        if self.__group_selected_indices:
-            context_clear_group_select = QAction(Strings.CONTEXT_CLEAR_GROUP_SELECT, self)
-            context_clear_group_select.setShortcuts(Shortcuts.CLEAR_GROUP_SELECT)
-            context_clear_group_select.triggered.connect(self.clear_group_selection)
-
-            context.addAction(context_clear_group_select)
-
+        hit = self._contour_at_position(pos)
+        if hit is None:
+            self.__group_selected_indices = []
+        elif hit not in self.__group_selected_indices:
+            self.__group_selected_indices = [hit]
+        self.update_preview()
+        self.update_controls()
+        selected = bool(self.__group_selected_indices)
+        editable = selected and not self._prediction_running
+        context = QMenu(self)
+        add = context.addAction(Strings.ADD_CONTOUR, self.start_drawing)
+        add.setEnabled(self.label_image.data is not None and not self._prediction_running)
+        context.addSeparator()
+        remove = context.addAction(Strings.REMOVE_CONTOUR, self.remove_selected_contour)
+        remove.setEnabled(editable)
+        mark_nice = context.addAction(Strings.MARK_NICE, lambda: self.reclassify_selected(True))
+        mark_nice.setEnabled(editable)
+        mark_not_nice = context.addAction(Strings.MARK_NOT_NICE, lambda: self.reclassify_selected(False))
+        mark_not_nice.setEnabled(editable)
+        context.addSeparator()
+        properties = context.addAction(Strings.CONTOUR_PROPERTIES, self.show_contour_properties)
+        properties.setEnabled(selected)
         context.exec(self.label_image.mapToGlobal(pos))
+
+    def show_contour_properties(self):
+        if self.__current_index < 0 or not self.__group_selected_indices:
+            return
+        data = self.__image_data[self.__current_index]
+        ContourPropertiesDialog(data, self.__group_selected_indices, self).exec()
+
+    def reclassify_selected(self, nice):
+        if self._prediction_running or self.__current_index < 0:
+            return
+        data = self.__image_data[self.__current_index]
+        indices = [i for i in self.__group_selected_indices if 0 <= i < len(data['contours'])]
+        if indices:
+            self.__undo_stack.push(MarkContoursCommand(data, indices, nice))
 
     def _set_preview_tool(self, tool):
         self.__drawing = tool == "draw"
@@ -616,6 +648,7 @@ class MainWindow(QMainWindow):
         self.zoom(self.__effective_scale / 1.2)
 
     def prediction_enable_controls(self, enable):
+        self._prediction_running = not enable
         self.panel_image_list.setEnabled(enable)
         self.button_predict.setVisible(enable)
         self.button_cancel.setVisible(not enable)

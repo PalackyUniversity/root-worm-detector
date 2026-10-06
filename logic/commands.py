@@ -39,6 +39,7 @@ class RemoveContoursCommand(QUndoCommand):
         self.indices = sorted(indices, reverse=True)
         self.removed_contours = []
         self.removed_scores = []
+        self.removed_measurements = []
 
     def redo(self):
         """Remove contours and their scores"""
@@ -53,6 +54,11 @@ class RemoveContoursCommand(QUndoCommand):
             if "scores" in self.image_data and idx < len(self.image_data["scores"])
         ]
 
+        records = self.image_data.get("measurements", [])
+        self.removed_measurements = [(i, records[i]) for i in self.indices if i < len(records)]
+        for i, _ in self.removed_measurements:
+            del records[i]
+
         for idx, _ in self.removed_contours:
             del self.image_data["contours"][idx]
         for idx, _ in self.removed_scores:
@@ -66,5 +72,8 @@ class RemoveContoursCommand(QUndoCommand):
             self.image_data["contours"].insert(idx, contour)
         for idx, score in reversed(self.removed_scores):
             self.image_data["scores"].insert(idx, score)
+
+        for index, record in reversed(self.removed_measurements):
+            self.image_data["measurements"].insert(index, record)
 
         ImageLogic.save_image_data(self.image_data)

@@ -31,7 +31,10 @@ class ImageLogic:
                 if int(meta.get("model_version", 0)) >= Model.CURRENT_MODEL_VERSION:
                     data["predicted"] = True
                     data["contours"] = [np.array(cnt, dtype=np.int32) for cnt in meta.get("contours", [])]
-                    data["scores"] = [float(i) for i in meta.get("scores", [])]
+                    data["scores"] = [float(i) if i is not None else None for i in meta.get("scores", [])]
+                    for key in ("measurements", "nice_threshold", "pipeline", "provenance", "dpi"):
+                        if key in meta:
+                            data[key] = meta[key]
             except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
                 pass
         if load_pixels:
@@ -166,12 +169,17 @@ class ImageLogic:
             "model_version": Model.CURRENT_MODEL_VERSION,
             "contours": [cnt.tolist() for cnt in data["contours"]]
         }
+        for key in ("scores", "measurements", "nice_threshold", "pipeline", "provenance", "dpi"):
+            if key in data:
+                meta[key] = data[key]
         with open(data["path"] + "_contours.json", "w") as f:
             json.dump(meta, f)
 
     @staticmethod
     def draw_prediction_scores(img, contours, scores, group_selected_indices, effective_scale):
         for i, (cnt, score) in enumerate(zip(contours, scores)):
+            if score is None:
+                continue
             m = cv2.moments(cnt)
             if m["m00"] != 0:
                 cx = int(m["m10"] / m["m00"])

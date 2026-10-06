@@ -58,6 +58,28 @@ class Strings:
     CONTEXT_IMPORT_FOLDER = "Import Folder"
     CONTEXT_CLEAR_GROUP_SELECT = "Clear Group Selection"
 
+    CONTOUR_PROPERTIES = "Properties…"
+    CONTOUR_PROPERTIES_TITLE = "Contour properties"
+    PROPERTY = "Property"
+    CONTOUR_NUMBER = "Contour {number}"
+    DETECTOR_CONFIDENCE = "Detector confidence"
+    MODEL_NICE_PROBABILITY = "Model probability: nice"
+    MODEL_NOT_NICE_PROBABILITY = "Model probability: not nice (1 − nice)"
+    NICE_THRESHOLD_PROPERTY = "Nice classification threshold"
+    CURRENT_CLASSIFICATION = "Current classification"
+    MODEL_CLASSIFICATION = "Original model classification"
+    MANUAL_OVERRIDE = "Manual override"
+    REFINED_AREA = "Refined area (mm²)"
+    CLASS_NICE = "Nice"
+    CLASS_NOT_NICE = "Not nice"
+    CLASS_UNKNOWN = "Unknown"
+    NOT_AVAILABLE = "Not available"
+    NO_OVERRIDE = "None"
+    PROPERTIES_NOTE = "Model probabilities stay unchanged by manual edits. Not nice is calculated as 1 − nice. Only saved model values are shown; pixel-level mask probabilities are not stored."
+
+    MARK_NICE = "Mark nice"
+    MARK_NOT_NICE = "Mark not nice"
+
     # File dialog
     SELECT_IMAGES = "Select Images"
     SELECT_FOLDER = "Select Folder"
