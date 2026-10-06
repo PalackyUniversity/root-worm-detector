@@ -322,8 +322,7 @@ class MainWindow(QMainWindow):
     def show_list_context_menu(self, pos: QPoint):
         # Right click -> Delete image
         context_remove = QAction(Strings.CONTEXT_DELETE_IMAGE, self)
-        context_remove.setIcon(Icons.create_remove_icon())
-        context_remove.setEnabled(self.panel_image_list.count() > 0)
+        context_remove.setEnabled(self.panel_image_list.indexAt(pos).isValid())
 
         # Right click -> Import image/s
         context_import_files = QAction(Strings.CONTEXT_IMPORT_FILES, self)
@@ -461,19 +460,14 @@ class MainWindow(QMainWindow):
     def update_image_list(self):
         self.panel_image_list.clear()
 
-        if not self.__image_data:
-            placeholder = QListWidgetItem(Strings.IMAGE_LIST)
-            placeholder.setFlags(Qt.NoItemFlags)  # Disable selection
-            self.panel_image_list.addItem(placeholder)
-
-        else:
+        if self.__image_data:
             for idx, data in enumerate(self.__image_data):
                 item = QListWidgetItem(os.path.basename(data["path"]))
+                item.setToolTip(data["path"])
 
                 if data.get("processing", False):
                     item.setIcon(Icons.create_loading_icon())
-                elif data.get("predicted", False):
-                    item.setIcon(Icons.create_done_icon())
+                item.setData(Qt.UserRole, data.get("predicted", False) and not data.get("processing", False))
 
                 self.panel_image_list.addItem(item)
 
