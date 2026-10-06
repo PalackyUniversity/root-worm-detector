@@ -1,7 +1,7 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                                QSplitter, QListWidget, QListWidgetItem, QLabel, QPushButton, QFileDialog, QScrollArea,
-                               QProgressBar, QMenu, QMessageBox, QUndoView)
-from PySide6.QtGui import QImage, QPixmap, QMouseEvent, QAction, QPalette, QUndoStack
+                               QProgressBar, QMenu, QMessageBox, QUndoView, QStatusBar)
+from PySide6.QtGui import QImage, QPixmap, QMouseEvent, QAction, QUndoStack
 from PySide6.QtCore import Qt, QPoint, QRect
 from logic.prediction_logic import PredictionLogic
 from logic.export_logic import ExportLogic
@@ -15,6 +15,8 @@ from config.general import Config
 from config.icons import Icons
 import cv2
 import os
+import math
+from time import monotonic
 
 
 class MainWindow(QMainWindow):
@@ -86,21 +88,25 @@ class MainWindow(QMainWindow):
         # Cancel button
         self.button_cancel = QPushButton(Strings.CANCEL)
         self.button_cancel.setFixedWidth(80)
-        self.button_cancel.setStyleSheet("background-color: red; color: white;")
         self.button_cancel.setVisible(False)
         self.button_cancel.clicked.connect(self.cancel_prediction_process)
 
         # Zoom out button
-        self.button_zoom_out = QPushButton()
-        self.button_zoom_out.setIcon(Icons.create_zoom_out_icon())
-        self.button_zoom_out.setFixedWidth(30)
+        self.button_zoom_out = QPushButton(Strings.ZOOM_OUT_SYMBOL)
+        self.button_zoom_out.setToolTip(Strings.ZOOM_OUT)
+        self.button_zoom_out.setFixedWidth(32)
         self.button_zoom_out.clicked.connect(self.zoom_step_out)
 
         # Zoom in button
-        self.button_zoom_in = QPushButton()
-        self.button_zoom_in.setIcon(Icons.create_zoom_in_icon())
-        self.button_zoom_in.setFixedWidth(30)
+        self.button_zoom_in = QPushButton(Strings.ZOOM_IN_SYMBOL)
+        self.button_zoom_in.setToolTip(Strings.ZOOM_IN)
+        self.button_zoom_in.setFixedWidth(32)
         self.button_zoom_in.clicked.connect(self.zoom_step_in)
+
+        for button in (self.button_contour_add, self.button_contour_remove,
+                       self.button_group_select, self.button_cross_view,
+                       self.button_zoom_out, self.button_zoom_in):
+            button.setProperty("iconButton", True)
 
         # Zoom label
         self.label_zoom = QLabel("100%")
@@ -130,8 +136,14 @@ class MainWindow(QMainWindow):
 
         # Progress bar
         self.progress_bar = QProgressBar()
+        self.progress_bar.setFixedWidth(150)
+        self.progress_bar.setFixedHeight(self.button_predict.sizeHint().height())
         self.progress_bar.setMaximum(100)
         self.progress_bar.setVisible(False)
+
+        self.label_time_remaining = QLabel()
+        self.label_time_remaining.setVisible(False)
+        self._progress_started = None
 
         # Middle panel
         panel_tool = QWidget()
@@ -150,19 +162,23 @@ class MainWindow(QMainWindow):
         splitter.addWidget(panel_tool)
         splitter.setStretchFactor(1, 1)
 
-        # Bottom panel
-        bottom_layout = QHBoxLayout()
-        bottom_layout.addWidget(self.button_zoom_out)
-        bottom_layout.addWidget(self.button_zoom_in)
-        bottom_layout.addWidget(self.label_zoom)
-        bottom_layout.addWidget(self.progress_bar)
-        bottom_layout.addWidget(self.button_predict)
-        bottom_layout.addWidget(self.button_cancel)
+        # Match Root Tracker's status bar: zoom left, progress and actions right.
+        status_bar = QStatusBar(self)
+        status_bar.setSizeGripEnabled(False)
+        status_bar.setContentsMargins(3, 3, 5, 3)
+        self.setStatusBar(status_bar)
+        status_bar.addWidget(self.button_zoom_out)
+        status_bar.addWidget(self.button_zoom_in)
+        status_bar.addWidget(self.label_zoom)
+        status_bar.addWidget(QWidget(), 1)
+        status_bar.addPermanentWidget(self.label_time_remaining)
+        status_bar.addPermanentWidget(self.progress_bar)
+        status_bar.addPermanentWidget(self.button_predict)
+        status_bar.addPermanentWidget(self.button_cancel)
 
         central = QWidget()
         main_layout = QVBoxLayout(central)
         main_layout.addWidget(splitter)
-        main_layout.addLayout(bottom_layout)
         self.setCentralWidget(central)
 
         # Menu -> File -> Import files
@@ -361,18 +377,17 @@ class MainWindow(QMainWindow):
         self.update_preview()
         if self.__drawing or self.__drawing:
             self.__drawing = False
-            self.button_contour_add.setStyleSheet("")
+            self.button_contour_add.setChecked(False)
             self.label_image.setCursor(Qt.ArrowCursor)
 
         # Toggle group selection mode.
         if self.__group_select_active:
             self.__group_select_active = False
-            self.button_group_select.setStyleSheet("")
+            self.button_group_select.setChecked(False)
             self.__group_selected_indices = []
         else:
             self.__group_select_active = True
-            highlight = self.palette().color(QPalette.Highlight).name()
-            self.button_group_select.setStyleSheet("background-color: " + highlight + ";")
+            self.button_group_select.setChecked(True)
 
     def clear_group_selection(self):
         self.__group_selected_indices = []
@@ -392,9 +407,35 @@ class MainWindow(QMainWindow):
                 if f.lower().endswith(Config.IMAGE_EXTENSIONS)
             ])
 
-    def load_files(self, files):
-        self.progress_bar.setVisible(True)
+    def _begin_progress(self):
+        self._progress_started = monotonic()
+        self.progress_bar.setValue(0)
+        self.label_time_remaining.setText(Strings.ESTIMATING)
+        self.progress_bar.show()
+        self.label_time_remaining.show()
+        QApplication.processEvents()
 
+    def _update_progress(self, completed, total):
+        self.progress_bar.setValue(int(completed / max(total, 1) * 100))
+        if completed and self._progress_started is not None:
+            remaining = max(0, math.ceil(
+                (monotonic() - self._progress_started) / completed * (total - completed)
+            ))
+            if remaining >= 60:
+                text = Strings.TIME_REMAINING_MINUTES.format(
+                    minutes=remaining // 60, seconds=remaining % 60)
+            else:
+                text = Strings.TIME_REMAINING_SECONDS.format(seconds=remaining)
+            self.label_time_remaining.setText(text)
+        QApplication.processEvents()
+
+    def _end_progress(self):
+        self.progress_bar.hide()
+        self.label_time_remaining.hide()
+        self.label_time_remaining.clear()
+        self._progress_started = None
+
+    def load_files(self, files):
         # Filter out files that are already loaded
         existing_paths = {data["path"] for data in self.__image_data}
         files_to_load = [f for f in files if f not in existing_paths]
@@ -403,20 +444,19 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, Strings.ALREADY_IMPORTED_TITLE, Strings.ALREADY_IMPORTED_MESSAGE)
 
         total = len(files_to_load)
-        for i, f in enumerate(files_to_load):
-            try:
-                data = ImageLogic.load_image(f)
-                self.__image_data.append(data)
-            except Exception as e:
-                QMessageBox.critical(self, Strings.IMAGE_LOAD_ERROR_TITLE, str(e))
-                continue
-            self.progress_bar.setValue(int(((i + 1) / max(total, 1)) * 100))
-            QApplication.processEvents()
-
-        self.progress_bar.setVisible(False)
-
-        self.update_image_list()
-        self.update_controls()
+        self._begin_progress()
+        try:
+            for i, f in enumerate(files_to_load):
+                try:
+                    data = ImageLogic.load_image(f)
+                    self.__image_data.append(data)
+                except Exception as e:
+                    QMessageBox.critical(self, Strings.IMAGE_LOAD_ERROR_TITLE, str(e))
+                self._update_progress(i + 1, total)
+        finally:
+            self._end_progress()
+            self.update_image_list()
+            self.update_controls()
 
     def update_image_list(self):
         self.panel_image_list.clear()
@@ -558,36 +598,38 @@ class MainWindow(QMainWindow):
         self.__cancel_prediction = False
 
         total = len(indices_to_predict)
-        self.progress_bar.setVisible(True)
-        self.progress_bar.setValue(0)
+        self._begin_progress()
+        try:
+            for idx_num, idx in enumerate(indices_to_predict):
+                if self.__cancel_prediction:
+                    break
 
-        for idx_num, idx in enumerate(indices_to_predict):
-            if self.__cancel_prediction:
-                break
+                self.__image_data[idx]["processing"] = True
+                self.update_image_list()
 
-            self.__image_data[idx]["processing"] = True
+                contours, scores = PredictionLogic.predict_contours(self.__image_data[idx]["image"], self.__image_data[idx]["path"])
+                self.__image_data[idx]["contours"] = contours
+                self.__image_data[idx]["scores"] = scores
+
+                self.__image_data[idx]["predicted"] = True
+                self.__image_data[idx]["processing"] = False
+                self.update_image_list()
+
+                # --- Update preview after each prediction to show confidences ---
+                self.update_preview()
+                # --- End update preview ---
+
+                # Progress bar increases as files are processed
+                self._update_progress(idx_num + 1, total)
+
+        finally:
+            for idx in indices_to_predict:
+                self.__image_data[idx]["processing"] = False
+            self._end_progress()
+            self.prediction_enable_controls(True)
             self.update_image_list()
-
-            contours, scores = PredictionLogic.predict_contours(self.__image_data[idx]["image"], self.__image_data[idx]["path"])
-            self.__image_data[idx]["contours"] = contours
-            self.__image_data[idx]["scores"] = scores
-
-            self.__image_data[idx]["predicted"] = True
-            self.__image_data[idx]["processing"] = False
-            self.update_image_list()
-
-            # --- Update preview after each prediction to show confidences ---
             self.update_preview()
-            # --- End update preview ---
-
-            # Progress bar increases as files are processed
-            self.progress_bar.setValue(int(((idx_num + 1) / total) * 100))
-            QApplication.processEvents()
-
-        self.progress_bar.setVisible(False)
-        self.prediction_enable_controls(True)
-        self.update_preview()
-        self.update_controls()
+            self.update_controls()
 
     def cancel_prediction_process(self):
         self.__cancel_prediction = True
@@ -600,22 +642,21 @@ class MainWindow(QMainWindow):
         if self.__drawing:
             # Deselect contour addition
             self.__drawing = False
-            self.button_contour_add.setStyleSheet("")
+            self.button_contour_add.setChecked(False)
             self.label_image.setCursor(Qt.ArrowCursor)
 
         else:
             # Cancel group selection if active.
             if self.__group_select_active:
                 self.__group_select_active = False
-                self.button_group_select.setStyleSheet("")
+                self.button_group_select.setChecked(False)
                 self.__group_selection_start = None
                 self.__group_selection_rect = None
                 self.__group_selected_indices = []
 
             self.__drawing = True
             self.__current_contour = []
-            accent = self.palette().color(QPalette.Highlight).name()
-            self.button_contour_add.setStyleSheet("background-color: " + accent + ";")
+            self.button_contour_add.setChecked(True)
             self.label_image.setCursor(Qt.CrossCursor)
 
     def toggle_cross_preview(self):
@@ -629,12 +670,6 @@ class MainWindow(QMainWindow):
     def __toggle_cross_preview_common(self):
         self.button_cross_view.setChecked(self.__cross_preview_mode)
         self.menu_toggle_cross_preview.setChecked(self.__cross_preview_mode)
-
-        if self.__cross_preview_mode:
-            accent = self.palette().color(QPalette.Highlight).name()
-            self.button_cross_view.setStyleSheet("background-color: " + accent + ";")
-        else:
-            self.button_cross_view.setStyleSheet("")
 
         self.update_preview()
 

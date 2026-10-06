@@ -8,7 +8,12 @@ class Strings:
     GROUP_SELECT = "Group Select"
     CROSS_PREVIEW_TOOLTIP = "Toggle dot preview mode for contours"
     PREDICT = "Predict"
+    ZOOM_OUT_SYMBOL = "−"
+    ZOOM_IN_SYMBOL = "+"
     CANCEL = "Cancel"
+    ESTIMATING = "Estimating…"
+    TIME_REMAINING_SECONDS = "{seconds}s remaining"
+    TIME_REMAINING_MINUTES = "{minutes}m {seconds}s remaining"
 
     # Menus
     MENU_FILE = "File"

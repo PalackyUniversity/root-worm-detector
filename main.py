@@ -2,12 +2,14 @@
 from PySide6.QtWidgets import QApplication
 from PySide6.QtGui import QIcon
 from ui.main_window import MainWindow
+from ui.theme import apply_theme
 import sys
 import os
 
 
 def main():
     app = QApplication(sys.argv)
+    apply_theme(app)
 
     # Load translations if available (e.g. i18n/app_<locale>.qm)
     # translator = QTranslator()
